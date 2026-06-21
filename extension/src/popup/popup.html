@@ -9,13 +9,45 @@
   <body>
     <main class="popup-shell">
       <h1>Plant Companion</h1>
-      <p class="subtitle">Phase 1 static overlay</p>
+      <p class="subtitle">Your saved ambient plant</p>
+
+      <section id="setup-panel" class="panel" hidden>
+        <h2>Set up your plant</h2>
+        <p class="helper">Choose the companion that will follow you across pages.</p>
+        <form id="setup-form">
+          <label for="plant-type">Plant type</label>
+          <select id="plant-type" name="plantType" required>
+            <option value="fern">Fern</option>
+            <option value="succulent">Succulent</option>
+            <option value="blossom">Blossom</option>
+          </select>
+
+          <label for="location">Location</label>
+          <input id="location" name="location" type="text" placeholder="City, State" autocomplete="address-level2" required />
+
+          <button type="submit">Grow my plant</button>
+        </form>
+      </section>
+
+      <section id="plant-panel" class="panel" hidden>
+        <div id="plant-preview" class="plant-preview" aria-hidden="true"></div>
+        <dl class="plant-facts">
+          <div><dt>Type</dt><dd id="fact-type">—</dd></div>
+          <div><dt>Location</dt><dd id="fact-location">—</dd></div>
+          <div><dt>Growth</dt><dd id="fact-growth">—</dd></div>
+          <div><dt>Health</dt><dd id="fact-health">—</dd></div>
+          <div><dt>Hydration</dt><dd id="fact-hydration">—</dd></div>
+        </dl>
+        <button id="reset-setup" type="button" class="secondary-button">Change setup</button>
+      </section>
+
       <label class="toggle-row">
         <span>Show plant</span>
         <input id="plant-toggle" type="checkbox" checked />
       </label>
       <p id="status" class="status" role="status">Loading current tab…</p>
     </main>
+    <script src="../sharedPlantState.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
