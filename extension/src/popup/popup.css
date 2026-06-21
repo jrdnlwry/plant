@@ -1,54 +1,135 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #24313a;
+  background: #f7f1df;
 }
 
 body {
   margin: 0;
-  min-width: 240px;
-  background: #f7fee7;
-  color: #1f2937;
+  min-width: 280px;
 }
 
 .popup-shell {
   padding: 16px;
 }
 
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
 h1 {
+  margin-bottom: 4px;
+  font-size: 1.25rem;
+}
+
+h2 {
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.subtitle,
+.helper,
+.status {
+  color: #5f6b61;
+  font-size: 0.85rem;
+}
+
+.panel {
+  margin: 14px 0;
+  padding: 12px;
+  border: 2px solid #24313a;
+  border-radius: 12px;
+  background: #fff8e7;
+  box-shadow: 3px 3px 0 #d8c48f;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+label,
+dt {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+input,
+select,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  border: 2px solid #24313a;
+  border-radius: 8px;
+  font: inherit;
+}
+
+input,
+select {
+  padding: 8px;
+  background: #ffffff;
+}
+
+button {
+  margin-top: 4px;
+  padding: 9px 10px;
+  color: #ffffff;
+  font-weight: 800;
+  background: #2f7d32;
+  cursor: pointer;
+}
+
+.secondary-button {
+  color: #24313a;
+  background: #e0a14a;
+}
+
+.plant-preview {
+  width: 112px;
+  height: 112px;
+  margin: 0 auto 8px;
+}
+
+.plant-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.plant-facts {
+  display: grid;
+  gap: 6px;
   margin: 0;
-  color: #166534;
-  font-size: 18px;
-  line-height: 1.2;
 }
 
-.subtitle {
-  margin: 4px 0 16px;
-  color: #4b5563;
-  font-size: 12px;
-}
-
+.plant-facts div,
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 12px;
-  border: 1px solid #bbf7d0;
-  border-radius: 12px;
-  background: #ffffff;
-  font-weight: 650;
+  gap: 12px;
 }
 
-#plant-toggle {
-  width: 38px;
-  height: 22px;
-  accent-color: #16a34a;
-  cursor: pointer;
+.plant-facts dd {
+  margin: 0;
+  text-align: right;
+}
+
+.toggle-row {
+  margin-top: 12px;
+}
+
+.toggle-row input {
+  width: auto;
 }
 
 .status {
-  min-height: 16px;
-  margin: 12px 0 0;
-  color: #4b5563;
-  font-size: 12px;
+  margin: 10px 0 0;
 }

@@ -28,3 +28,16 @@
   image-rendering: crisp-edges;
   filter: drop-shadow(4px 6px 0 rgba(36, 49, 58, 0.18));
 }
+
+.ambient-plant-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 4px solid #24313a;
+  border-radius: 18px;
+  color: #24313a;
+  background: #fff8e7;
+  font: 700 64px/1 ui-monospace, monospace;
+  box-shadow: 4px 6px 0 rgba(36, 49, 58, 0.18);
+}

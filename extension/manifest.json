@@ -9,11 +9,21 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/injectPlant.js"],
-      "css": ["src/content/overlay.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/sharedPlantState.js",
+        "src/content/injectPlant.js"
+      ],
+      "css": [
+        "src/content/overlay.css"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["activeTab"]
+  "permissions": [
+    "activeTab",
+    "storage"
+  ]
 }
