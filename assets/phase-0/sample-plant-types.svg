@@ -1,0 +1,74 @@
+<svg width="672" height="144" viewBox="0 0 224 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Phase 0 pixel art plant type mockups" shape-rendering="crispEdges">
+  <style>
+    .label { font: 3px monospace; fill: #24313A; }
+    .o { fill: #24313A; }
+    .g0 { fill: #2F7D32; }
+    .g1 { fill: #4CAF50; }
+    .g2 { fill: #8BCF5A; }
+    .g3 { fill: #C7E86B; }
+    .b0 { fill: #6B3F24; }
+    .p0 { fill: #B86F35; }
+    .p1 { fill: #E0A14A; }
+    .f0 { fill: #F06CA7; }
+    .f1 { fill: #FFC0D9; }
+  </style>
+
+  <g id="fern" transform="translate(0 0)">
+    <text class="label" x="8" y="45">FERN</text>
+    <rect class="o" x="12" y="25" width="8" height="1"/><rect class="o" x="10" y="26" width="12" height="5"/><rect class="p0" x="11" y="26" width="10" height="4"/><rect class="p1" x="12" y="26" width="3" height="1"/><rect class="b0" x="13" y="25" width="6" height="1"/>
+    <rect class="o" x="15" y="9" width="2" height="17"/><rect class="g1" x="16" y="10" width="1" height="15"/>
+    <rect class="o" x="10" y="11" width="5" height="2"/><rect class="g1" x="11" y="11" width="4" height="1"/><rect class="g2" x="10" y="10" width="2" height="1"/>
+    <rect class="o" x="17" y="12" width="6" height="2"/><rect class="g1" x="17" y="12" width="5" height="1"/><rect class="g2" x="21" y="11" width="2" height="1"/>
+    <rect class="o" x="8" y="15" width="7" height="2"/><rect class="g0" x="9" y="15" width="6" height="1"/><rect class="g2" x="8" y="14" width="2" height="1"/>
+    <rect class="o" x="17" y="16" width="8" height="2"/><rect class="g1" x="17" y="16" width="7" height="1"/><rect class="g2" x="23" y="15" width="2" height="1"/>
+    <rect class="o" x="6" y="20" width="9" height="2"/><rect class="g1" x="7" y="20" width="8" height="1"/><rect class="g3" x="6" y="19" width="2" height="1"/>
+    <rect class="o" x="17" y="21" width="9" height="2"/><rect class="g0" x="17" y="21" width="8" height="1"/><rect class="g2" x="25" y="20" width="1" height="1"/>
+  </g>
+
+  <g id="vine" transform="translate(32 0)">
+    <text class="label" x="8" y="45">VINE</text>
+    <rect class="o" x="12" y="25" width="8" height="1"/><rect class="o" x="10" y="26" width="12" height="5"/><rect class="p0" x="11" y="26" width="10" height="4"/><rect class="p1" x="12" y="26" width="3" height="1"/><rect class="b0" x="13" y="25" width="6" height="1"/>
+    <rect class="o" x="15" y="10" width="2" height="16"/><rect class="g1" x="16" y="11" width="1" height="14"/>
+    <rect class="o" x="16" y="10" width="6" height="2"/><rect class="o" x="21" y="8" width="2" height="3"/><rect class="g2" x="17" y="10" width="5" height="1"/>
+    <rect class="o" x="10" y="14" width="5" height="4"/><rect class="g1" x="11" y="15" width="3" height="2"/><rect class="g2" x="12" y="14" width="2" height="1"/>
+    <rect class="o" x="17" y="18" width="5" height="4"/><rect class="g0" x="18" y="19" width="3" height="2"/><rect class="g2" x="19" y="18" width="2" height="1"/>
+    <rect class="o" x="8" y="21" width="7" height="2"/><rect class="o" x="8" y="19" width="2" height="3"/><rect class="g1" x="9" y="21" width="5" height="1"/>
+  </g>
+
+  <g id="flower" transform="translate(64 0)">
+    <text class="label" x="5" y="45">FLOWER</text>
+    <rect class="o" x="12" y="25" width="8" height="1"/><rect class="o" x="10" y="26" width="12" height="5"/><rect class="p0" x="11" y="26" width="10" height="4"/><rect class="p1" x="12" y="26" width="3" height="1"/><rect class="b0" x="13" y="25" width="6" height="1"/>
+    <rect class="o" x="15" y="13" width="2" height="13"/><rect class="g1" x="16" y="14" width="1" height="11"/>
+    <rect class="o" x="10" y="18" width="5" height="3"/><rect class="g1" x="11" y="18" width="4" height="2"/><rect class="g2" x="10" y="17" width="2" height="1"/>
+    <rect class="o" x="17" y="20" width="5" height="3"/><rect class="g0" x="17" y="20" width="4" height="2"/><rect class="g2" x="21" y="19" width="1" height="1"/>
+    <rect class="o" x="13" y="7" width="6" height="6"/><rect class="f0" x="14" y="8" width="4" height="4"/><rect class="f1" x="15" y="7" width="2" height="1"/><rect class="f1" x="13" y="9" width="1" height="2"/><rect class="f1" x="18" y="9" width="1" height="2"/><rect class="b0" x="15" y="10" width="2" height="2"/>
+  </g>
+
+  <g id="bonsai" transform="translate(96 0)">
+    <text class="label" x="5" y="45">BONSAI</text>
+    <rect class="o" x="11" y="25" width="10" height="1"/><rect class="o" x="9" y="26" width="14" height="5"/><rect class="p0" x="10" y="26" width="12" height="4"/><rect class="p1" x="11" y="26" width="4" height="1"/><rect class="b0" x="12" y="25" width="8" height="1"/>
+    <rect class="o" x="14" y="16" width="4" height="10"/><rect class="b0" x="15" y="17" width="2" height="8"/><rect class="o" x="16" y="14" width="4" height="4"/><rect class="b0" x="17" y="15" width="2" height="3"/>
+    <rect class="o" x="8" y="8" width="10" height="7"/><rect class="g1" x="9" y="9" width="8" height="5"/><rect class="g2" x="10" y="8" width="4" height="1"/>
+    <rect class="o" x="15" y="6" width="10" height="8"/><rect class="g0" x="16" y="7" width="8" height="6"/><rect class="g2" x="17" y="6" width="4" height="1"/>
+    <rect class="o" x="12" y="12" width="13" height="6"/><rect class="g1" x="13" y="13" width="11" height="4"/><rect class="g3" x="21" y="12" width="2" height="1"/>
+  </g>
+
+  <g id="cactus" transform="translate(128 0)">
+    <text class="label" x="5" y="45">CACTUS</text>
+    <rect class="o" x="12" y="25" width="8" height="1"/><rect class="o" x="10" y="26" width="12" height="5"/><rect class="p0" x="11" y="26" width="10" height="4"/><rect class="p1" x="12" y="26" width="3" height="1"/><rect class="b0" x="13" y="25" width="6" height="1"/>
+    <rect class="o" x="13" y="8" width="7" height="18"/><rect class="g1" x="14" y="9" width="5" height="16"/><rect class="g2" x="15" y="9" width="2" height="14"/>
+    <rect class="o" x="8" y="15" width="6" height="7"/><rect class="g0" x="9" y="16" width="4" height="5"/><rect class="g2" x="10" y="16" width="1" height="3"/>
+    <rect class="o" x="19" y="12" width="5" height="8"/><rect class="g0" x="20" y="13" width="3" height="6"/><rect class="g2" x="21" y="13" width="1" height="3"/>
+    <rect class="f0" x="15" y="6" width="3" height="2"/><rect class="f1" x="16" y="5" width="1" height="1"/>
+  </g>
+
+  <g id="grass" transform="translate(160 0)">
+    <text class="label" x="5" y="45">GRASS</text>
+    <rect class="o" x="10" y="27" width="12" height="3"/><rect class="b0" x="11" y="27" width="10" height="2"/>
+    <rect class="o" x="5" y="22" width="4" height="6"/><rect class="g1" x="6" y="23" width="2" height="5"/><rect class="g2" x="7" y="22" width="1" height="1"/>
+    <rect class="o" x="9" y="17" width="4" height="11"/><rect class="g0" x="10" y="18" width="2" height="10"/><rect class="g2" x="11" y="17" width="1" height="2"/>
+    <rect class="o" x="14" y="14" width="4" height="14"/><rect class="g1" x="15" y="15" width="2" height="13"/><rect class="g3" x="16" y="14" width="1" height="2"/>
+    <rect class="o" x="19" y="18" width="4" height="10"/><rect class="g0" x="20" y="19" width="2" height="9"/><rect class="g2" x="20" y="18" width="1" height="1"/>
+    <rect class="o" x="23" y="23" width="4" height="5"/><rect class="g1" x="24" y="24" width="2" height="4"/>
+  </g>
+</svg>
