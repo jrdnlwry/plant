@@ -3,32 +3,55 @@
 
   function createStaticPlantSvg() {
     return `
-      <svg viewBox="0 0 120 150" role="img" aria-label="Ambient plant companion" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="ambient-plant-pot" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stop-color="#f59e0b" />
-            <stop offset="100%" stop-color="#b45309" />
-          </linearGradient>
-          <linearGradient id="ambient-plant-leaf" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#86efac" />
-            <stop offset="100%" stop-color="#16a34a" />
-          </linearGradient>
-        </defs>
-        <ellipse cx="60" cy="136" rx="33" ry="7" fill="rgba(15, 23, 42, 0.18)" />
-        <path d="M34 106h52l-7 32H41z" fill="url(#ambient-plant-pot)" />
-        <path d="M31 101h58a4 4 0 0 1 4 4v5H27v-5a4 4 0 0 1 4-4z" fill="#d97706" />
-        <path d="M60 104 C58 82 58 61 61 39" fill="none" stroke="#15803d" stroke-width="5" stroke-linecap="round" />
-        <path d="M61 75 C47 63 37 56 25 55" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round" />
-        <path d="M60 68 C76 55 86 47 98 42" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round" />
-        <path d="M60 91 C72 83 83 79 96 78" fill="none" stroke="#16a34a" stroke-width="3.5" stroke-linecap="round" />
-        <ellipse cx="24" cy="55" rx="14" ry="7" fill="url(#ambient-plant-leaf)" transform="rotate(-12 24 55)" />
-        <ellipse cx="38" cy="66" rx="12" ry="6" fill="#22c55e" transform="rotate(34 38 66)" />
-        <ellipse cx="99" cy="42" rx="15" ry="7" fill="url(#ambient-plant-leaf)" transform="rotate(-30 99 42)" />
-        <ellipse cx="82" cy="52" rx="12" ry="6" fill="#4ade80" transform="rotate(44 82 52)" />
-        <ellipse cx="97" cy="78" rx="12" ry="6" fill="#22c55e" transform="rotate(-8 97 78)" />
-        <ellipse cx="73" cy="86" rx="10" ry="5" fill="#86efac" transform="rotate(28 73 86)" />
-        <circle cx="62" cy="34" r="7" fill="#f472b6" />
-        <circle cx="57" cy="38" r="4" fill="#f9a8d4" />
+      <svg viewBox="0 0 32 32" role="img" aria-label="Retro pixel plant companion" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+        <rect x="10" y="4" width="2" height="2" fill="#24313A" />
+        <rect x="12" y="3" width="4" height="1" fill="#24313A" />
+        <rect x="16" y="4" width="2" height="2" fill="#24313A" />
+        <rect x="11" y="6" width="6" height="1" fill="#24313A" />
+        <rect x="12" y="4" width="4" height="2" fill="#F06CA7" />
+        <rect x="13" y="4" width="2" height="1" fill="#F06CA7" />
+
+        <rect x="15" y="7" width="2" height="15" fill="#24313A" />
+        <rect x="16" y="7" width="1" height="15" fill="#2F7D32" />
+
+        <rect x="7" y="9" width="6" height="1" fill="#24313A" />
+        <rect x="5" y="10" width="8" height="1" fill="#24313A" />
+        <rect x="4" y="11" width="8" height="2" fill="#24313A" />
+        <rect x="5" y="13" width="6" height="1" fill="#24313A" />
+        <rect x="7" y="10" width="5" height="3" fill="#4CAF50" />
+        <rect x="5" y="11" width="3" height="1" fill="#8BCF5A" />
+        <rect x="9" y="12" width="2" height="1" fill="#2F7D32" />
+
+        <rect x="20" y="8" width="5" height="1" fill="#24313A" />
+        <rect x="20" y="9" width="7" height="1" fill="#24313A" />
+        <rect x="21" y="10" width="7" height="2" fill="#24313A" />
+        <rect x="22" y="12" width="4" height="1" fill="#24313A" />
+        <rect x="21" y="9" width="5" height="3" fill="#4CAF50" />
+        <rect x="24" y="10" width="3" height="1" fill="#8BCF5A" />
+        <rect x="21" y="11" width="2" height="1" fill="#2F7D32" />
+
+        <rect x="9" y="15" width="5" height="1" fill="#24313A" />
+        <rect x="8" y="16" width="7" height="2" fill="#24313A" />
+        <rect x="10" y="18" width="4" height="1" fill="#24313A" />
+        <rect x="10" y="16" width="4" height="2" fill="#4CAF50" />
+        <rect x="8" y="16" width="2" height="1" fill="#8BCF5A" />
+
+        <rect x="18" y="16" width="5" height="1" fill="#24313A" />
+        <rect x="18" y="17" width="7" height="2" fill="#24313A" />
+        <rect x="19" y="19" width="4" height="1" fill="#24313A" />
+        <rect x="19" y="17" width="5" height="2" fill="#4CAF50" />
+        <rect x="22" y="17" width="2" height="1" fill="#8BCF5A" />
+
+        <rect x="8" y="21" width="16" height="2" fill="#24313A" />
+        <rect x="9" y="23" width="14" height="1" fill="#24313A" />
+        <rect x="10" y="24" width="12" height="5" fill="#24313A" />
+        <rect x="11" y="29" width="10" height="1" fill="#24313A" />
+        <rect x="9" y="21" width="14" height="1" fill="#E0A14A" />
+        <rect x="10" y="22" width="12" height="1" fill="#B86F35" />
+        <rect x="11" y="24" width="10" height="4" fill="#B86F35" />
+        <rect x="11" y="24" width="3" height="4" fill="#E0A14A" />
+        <rect x="18" y="25" width="3" height="3" fill="#6B3F24" />
+        <rect x="12" y="29" width="8" height="1" fill="#6B3F24" />
       </svg>
     `;
   }
