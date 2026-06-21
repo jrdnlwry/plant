@@ -20,24 +20,89 @@
   };
 
   const PLANT_TYPES = {
-    fern: { label: 'Fern', stem: '#2f7d32', leaf: '#4caf50', highlight: '#8bcf5a', silhouette: 'wide' },
-    succulent: { label: 'Succulent', stem: '#3f7f5f', leaf: '#66b889', highlight: '#a6d9a8', silhouette: 'rosette' },
-    blossom: { label: 'Blossom', stem: '#2f7d32', leaf: '#5fbf5a', highlight: '#f06ca7', silhouette: 'flower' },
+    fern: {
+      label: 'Fern',
+      stem: '#2f7d32',
+      leaf: '#4caf50',
+      highlight: '#8bcf5a',
+      silhouette: 'frond',
+      modules: { branches: 5, leavesPerBranch: 3, tendrils: 1, flowers: 0, canopy: 0, trunk: 0 },
+    },
+    succulent: {
+      label: 'Succulent',
+      stem: '#3f7f5f',
+      leaf: '#66b889',
+      highlight: '#a6d9a8',
+      silhouette: 'rosette',
+      modules: { branches: 0, leavesPerBranch: 8, tendrils: 0, flowers: 0, canopy: 0, trunk: 0 },
+    },
+    blossom: {
+      label: 'Blossom',
+      stem: '#2f7d32',
+      leaf: '#5fbf5a',
+      highlight: '#f06ca7',
+      flower: '#f06ca7',
+      silhouette: 'flower',
+      modules: { branches: 3, leavesPerBranch: 2, tendrils: 0, flowers: 3, canopy: 0, trunk: 0 },
+    },
+    vine: {
+      label: 'Vine',
+      stem: '#2f7d32',
+      leaf: '#59a846',
+      highlight: '#a8d65f',
+      silhouette: 'tendril',
+      modules: { branches: 4, leavesPerBranch: 2, tendrils: 4, flowers: 1, canopy: 0, trunk: 0 },
+    },
+    sapling: {
+      label: 'Sapling',
+      stem: '#6b3f24',
+      leaf: '#4caf50',
+      highlight: '#8bcf5a',
+      silhouette: 'canopy',
+      modules: { branches: 3, leavesPerBranch: 1, tendrils: 0, flowers: 0, canopy: 5, trunk: 1 },
+    },
   };
 
   function clamp(value, min, max) {
     return Math.min(Math.max(Number(value) || 0, min), max);
   }
 
+  function hashString(value) {
+    return String(value || '').split('').reduce((hash, char) => {
+      const nextHash = (hash << 5) - hash + char.charCodeAt(0);
+      return nextHash >>> 0;
+    }, 2166136261);
+  }
+
+  function createRng(seed) {
+    let value = seed >>> 0;
+    return () => {
+      value += 0x6d2b79f5;
+      let result = value;
+      result = Math.imul(result ^ (result >>> 15), result | 1);
+      result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+      return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function pick(rng, options) {
+    return options[Math.floor(rng() * options.length)];
+  }
+
   function normalizePlantState(state = {}) {
     const now = new Date().toISOString();
     const plantType = PLANT_TYPES[state.plantType] ? state.plantType : DEFAULT_PLANT_STATE.plantType;
+    const createdAt = state.createdAt || now;
+    const location = typeof state.location === 'string' ? state.location.trim() : '';
+    const seed = Number.isFinite(Number(state.seed))
+      ? Number(state.seed) >>> 0
+      : hashString(`${plantType}|${location}|${createdAt}`);
 
     return {
       ...DEFAULT_PLANT_STATE,
       ...state,
       plantType,
-      location: typeof state.location === 'string' ? state.location.trim() : '',
+      location,
       growthStage: clamp(state.growthStage ?? DEFAULT_PLANT_STATE.growthStage, 1, 4),
       health: clamp(state.health ?? DEFAULT_PLANT_STATE.health, 0, 100),
       hydration: clamp(state.hydration ?? DEFAULT_PLANT_STATE.hydration, 0, 100),
@@ -235,7 +300,8 @@
   function renderPlantSvg(stateInput) {
     const state = normalizePlantState(stateInput);
     const preset = PLANT_TYPES[state.plantType];
-    const outline = '#24313a';
+    const rng = createRng(state.seed + Math.round(state.growthStage) * 997);
+    const stage = Math.round(state.growthStage);
     const healthRatio = state.health / 100;
     const hydrationRatio = state.hydration / 100;
     const stage = Math.round(state.growthStage);

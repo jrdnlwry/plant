@@ -19,3 +19,7 @@ Phase 1 is a Chrome Manifest V3 extension that injects a lightweight static SVG 
 5. Open an ordinary webpage and use the extension popup to toggle the plant overlay.
 
 Future phases will add persisted plant state, onboarding, deterministic growth, weather, and dynamic SVG rendering.
+
+## Phase 4
+
+Phase 4 replaces the fixed hand-authored plant shapes with a deterministic modular pixel growth language. Plant SVGs are now assembled from reusable modules—stems, trunks, branches, leaf clusters, buds, flowers, tendrils, canopy clusters, and the shared pot—using a saved seed plus plant-type rules so different seeds produce visibly different but stylistically consistent companions.
