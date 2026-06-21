@@ -304,7 +304,6 @@
     const stage = Math.round(state.growthStage);
     const healthRatio = state.health / 100;
     const hydrationRatio = state.hydration / 100;
-    const stage = Math.round(state.growthStage);
     const weather = state.weather || {};
     const isHot = state.weatherMood === 'hot';
     const isRainy = state.weatherMood === 'rainy';
@@ -317,6 +316,7 @@
     const leafFill = isHot || hydrationRatio < 0.35 ? '#86a85a' : isRainy ? '#55c767' : preset.leaf;
     const highlight = isCloudy ? '#7fae68' : isSunny ? '#b6e66b' : preset.highlight;
     const stemFill = healthRatio < 0.35 ? '#777a45' : preset.stem;
+    const outline = healthRatio < 0.35 ? '#4f5133' : '#1f3b24';
     const opacity = (0.55 + healthRatio * 0.45).toFixed(2);
     const leaves = [];
     const extraClusters = (isRainy || isSunny) && stage >= 2 ? 1 : 0;
