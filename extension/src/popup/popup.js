@@ -38,15 +38,27 @@ function renderSetup(state) {
   plantPreview.innerHTML = window.PlantCompanionState.renderPlantSvg(state);
   document.getElementById('fact-type').textContent = preset.label;
   document.getElementById('fact-location').textContent = state.location;
-  document.getElementById('fact-growth').textContent = `Stage ${state.growthStage}`;
-  document.getElementById('fact-health').textContent = `${state.health}%`;
-  document.getElementById('fact-hydration').textContent = `${state.hydration}%`;
+  document.getElementById('fact-growth').textContent = `Stage ${state.growthStage} · ${Math.round(state.growthProgress)}%`;
+  document.getElementById('fact-health').textContent = `${Math.round(state.health)}%`;
+  document.getElementById('fact-hydration').textContent = `${Math.round(state.hydration)}%`;
+  document.getElementById('fact-weather').textContent = state.weatherSummary;
+  document.getElementById('fact-flowers').textContent = String(Math.round(state.flowerCount));
 }
 
 async function syncPlantState() {
-  const state = await window.PlantCompanionState.getStoredPlantState();
+  const storedState = await window.PlantCompanionState.getStoredPlantState();
+  if (!storedState) {
+    renderSetup(null);
+    setStatus('Choose a plant type and location to start.');
+    return;
+  }
+
+  setStatus('Checking local weather…');
+  const state = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() =>
+    window.PlantCompanionState.advancePlantState(storedState)
+  );
   renderSetup(state);
-  if (!state) setStatus('Choose a plant type and location to start.');
+  setStatus(state.weather ? `Updated from ${state.weather.placeName} weather.` : 'Using elapsed time until weather is available.');
 }
 
 async function syncToggleFromCurrentTab() {
@@ -71,9 +83,10 @@ setupForm.addEventListener('submit', async (event) => {
   });
 
   const savedState = await window.PlantCompanionState.savePlantState(state);
-  renderSetup(savedState);
+  const refreshedState = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() => savedState);
+  renderSetup(refreshedState);
   await refreshActiveTabPlant();
-  setStatus('Plant setup saved. Refreshing pages will preserve this plant.');
+  setStatus(refreshedState.weather ? 'Plant setup saved with local weather.' : 'Plant setup saved. Weather will retry later.');
 });
 
 resetSetup.addEventListener('click', async () => {
