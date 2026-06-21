@@ -33,15 +33,81 @@
     `;
   }
 
+
+  function setOverlayPosition(root, left, top) {
+    const maxLeft = Math.max(0, window.innerWidth - root.offsetWidth);
+    const maxTop = Math.max(0, window.innerHeight - root.offsetHeight);
+    const nextLeft = Math.min(Math.max(0, left), maxLeft);
+    const nextTop = Math.min(Math.max(0, top), maxTop);
+
+    root.style.left = `${nextLeft}px`;
+    root.style.top = `${nextTop}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+  }
+
+  function enableDragging(root) {
+    if (root.dataset.dragEnabled === 'true') return;
+    root.dataset.dragEnabled = 'true';
+
+    let dragState = null;
+
+    root.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+
+      const rect = root.getBoundingClientRect();
+      dragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+
+      root.dataset.dragging = 'true';
+      root.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    root.addEventListener('pointermove', (event) => {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+      setOverlayPosition(root, event.clientX - dragState.offsetX, event.clientY - dragState.offsetY);
+      event.preventDefault();
+    });
+
+    function stopDragging(event) {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+      if (root.hasPointerCapture(event.pointerId)) {
+        root.releasePointerCapture(event.pointerId);
+      }
+
+      dragState = null;
+      root.dataset.dragging = 'false';
+      event.preventDefault();
+    }
+
+    root.addEventListener('pointerup', stopDragging);
+    root.addEventListener('pointercancel', stopDragging);
+
+    window.addEventListener('resize', () => {
+      const rect = root.getBoundingClientRect();
+      setOverlayPosition(root, rect.left, rect.top);
+    });
+  }
+
   function ensureOverlay() {
     let root = document.getElementById(ROOT_ID);
-    if (root) return root;
+    if (root) {
+      enableDragging(root);
+      return root;
+    }
 
     root = document.createElement('div');
     root.id = ROOT_ID;
     root.dataset.visible = 'true';
     root.innerHTML = createStaticPlantSvg();
     document.documentElement.appendChild(root);
+    enableDragging(root);
     return root;
   }
 

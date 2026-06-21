@@ -5,8 +5,15 @@
   width: 116px;
   height: 148px;
   z-index: 2147483647;
-  pointer-events: none;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
   contain: layout style paint;
+}
+
+#ambient-plant-companion-root[data-dragging="true"] {
+  cursor: grabbing;
 }
 
 #ambient-plant-companion-root[data-visible="false"] {
