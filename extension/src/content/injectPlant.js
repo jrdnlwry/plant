@@ -2,7 +2,12 @@
   const ROOT_ID = 'ambient-plant-companion-root';
 
   async function renderStoredPlant(root) {
-    const state = await window.PlantCompanionState.getStoredPlantState();
+    let state = await window.PlantCompanionState.getStoredPlantState();
+    if (state) {
+      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() =>
+        window.PlantCompanionState.advancePlantState(state)
+      );
+    }
     root.dataset.configured = String(Boolean(state));
     root.innerHTML = state
       ? window.PlantCompanionState.renderPlantSvg(state)
