@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Ambient Plant Companion",
+  "description": "A lightweight plant companion overlay for webpages.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Plant Companion",
+    "default_popup": "src/popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/injectPlant.js"],
+      "css": ["src/content/overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab"]
+}
