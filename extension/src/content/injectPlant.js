@@ -4,9 +4,10 @@
   async function renderStoredPlant(root) {
     let state = await window.PlantCompanionState.getStoredPlantState();
     if (state) {
-      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() =>
-        window.PlantCompanionState.advancePlantState(state)
-      );
+      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
+        console.warn('Plant weather refresh failed:', error);
+        return window.PlantCompanionState.advancePlantState(state);
+      });
     }
     root.dataset.configured = String(Boolean(state));
     root.innerHTML = state

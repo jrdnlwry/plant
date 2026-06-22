@@ -7,6 +7,9 @@
     "default_title": "Plant Companion",
     "default_popup": "src/popup/popup.html"
   },
+  "background": {
+    "service_worker": "src/background/weatherService.js"
+  },
   "content_scripts": [
     {
       "matches": [

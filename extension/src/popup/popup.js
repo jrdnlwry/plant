@@ -54,11 +54,19 @@ async function syncPlantState() {
   }
 
   setStatus('Checking local weather…');
-  const state = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() =>
-    window.PlantCompanionState.advancePlantState(storedState)
-  );
+  let weatherError = null;
+  const state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
+    weatherError = error;
+    return window.PlantCompanionState.advancePlantState(storedState);
+  });
   renderSetup(state);
-  setStatus(state.weather ? `Updated from ${state.weather.placeName} weather.` : 'Using elapsed time until weather is available.');
+  if (state.weather) {
+    setStatus(`Updated from ${state.weather.placeName} weather.`);
+  } else if (weatherError) {
+    setStatus(`Weather unavailable: ${weatherError.message}. Using elapsed time until weather is available.`);
+  } else {
+    setStatus('Using elapsed time until weather is available.');
+  }
 }
 
 async function syncToggleFromCurrentTab() {
@@ -83,10 +91,20 @@ setupForm.addEventListener('submit', async (event) => {
   });
 
   const savedState = await window.PlantCompanionState.savePlantState(state);
-  const refreshedState = await window.PlantCompanionState.refreshPlantStateForWeather().catch(() => savedState);
+  let weatherError = null;
+  const refreshedState = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
+    weatherError = error;
+    return savedState;
+  });
   renderSetup(refreshedState);
   await refreshActiveTabPlant();
-  setStatus(refreshedState.weather ? 'Plant setup saved with local weather.' : 'Plant setup saved. Weather will retry later.');
+  if (refreshedState.weather) {
+    setStatus('Plant setup saved with local weather.');
+  } else if (weatherError) {
+    setStatus(`Plant setup saved. Weather unavailable: ${weatherError.message}`);
+  } else {
+    setStatus('Plant setup saved. Weather will retry later.');
+  }
 });
 
 resetSetup.addEventListener('click', async () => {
