@@ -152,43 +152,12 @@
     return now - Date.parse(state.weatherUpdatedAt) > WEATHER_REFRESH_MS;
   }
 
-  async function fetchJson(url) {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
-    return response.json();
-  }
-
-  async function fetchWeatherForLocation(location) {
-    const query = encodeURIComponent(location.trim());
-    const geo = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=1&language=en&format=json`);
-    const place = geo.results?.[0];
-    if (!place) throw new Error('Location not found');
-
-    const params = new URLSearchParams({
-      latitude: String(place.latitude),
-      longitude: String(place.longitude),
-      current: 'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,is_day',
-      daily: 'precipitation_sum,sunshine_duration',
-      past_days: '3',
-      forecast_days: '1',
-      timezone: 'auto',
+  function fetchWeatherForLocation(location) {
+    return chrome.runtime.sendMessage({ type: 'PLANT_FETCH_WEATHER', location }).then((response) => {
+      if (chrome.runtime.lastError) throw new Error(chrome.runtime.lastError.message);
+      if (!response?.ok) throw new Error(response?.error || 'Unable to fetch weather.');
+      return response.weather;
     });
-    const forecast = await fetchJson(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
-    const recentRain = (forecast.daily?.precipitation_sum || []).slice(-4).reduce((sum, value) => sum + Number(value || 0), 0);
-    const recentSunHours = (forecast.daily?.sunshine_duration || []).slice(-4).reduce((sum, value) => sum + Number(value || 0) / 3600, 0);
-
-    return {
-      placeName: [place.name, place.admin1].filter(Boolean).join(', '),
-      temperatureC: Number(forecast.current?.temperature_2m ?? 20),
-      humidity: Number(forecast.current?.relative_humidity_2m ?? 50),
-      precipitation: Number(forecast.current?.precipitation ?? 0),
-      weatherCode: Number(forecast.current?.weather_code ?? 0),
-      windSpeed: Number(forecast.current?.wind_speed_10m ?? 0),
-      isDay: forecast.current?.is_day !== 0,
-      recentRain,
-      recentSunHours,
-      fetchedAt: new Date().toISOString(),
-    };
   }
 
   function describeWeather(weather) {
