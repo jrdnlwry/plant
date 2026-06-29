@@ -1,3 +1,4 @@
+importScripts('../sharedPlantState.js');
 const US_STATE_ABBREVIATIONS = {
   AL: 'Alabama',
   AK: 'Alaska',
@@ -97,7 +98,7 @@ function selectMatchingPlace(results, city, state) {
   );
 }
 
-async function fetchWeatherForLocation(location) {
+async function fetchRemoteWeatherForLocation(location) {
   const { city, state } = parseCityState(location);
   const params = new URLSearchParams({
     name: city,
@@ -143,9 +144,33 @@ async function fetchWeatherForLocation(location) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'PLANT_FETCH_WEATHER') return false;
 
-  fetchWeatherForLocation(message.location)
+  fetchRemoteWeatherForLocation(message.location)
     .then((weather) => sendResponse({ ok: true, weather }))
     .catch((error) => sendResponse({ ok: false, error: error.message || 'Unable to fetch weather.' }));
 
   return true;
+});
+
+const WEATHER_ALARM_NAME = 'ambient-plant-weather-refresh';
+const WEATHER_ALARM_MINUTES = 30;
+
+async function refreshStoredPlantFromAlarm() {
+  const state = await globalThis.PlantCompanionState.getStoredPlantState();
+  if (!state?.location) return null;
+  const weather = await fetchRemoteWeatherForLocation(state.location);
+  const nextState = globalThis.PlantCompanionState.advancePlantState(state, weather);
+  return globalThis.PlantCompanionState.savePlantState(nextState);
+}
+
+function ensureWeatherAlarm() {
+  chrome.alarms.create(WEATHER_ALARM_NAME, { periodInMinutes: WEATHER_ALARM_MINUTES });
+}
+
+chrome.runtime.onInstalled.addListener(ensureWeatherAlarm);
+chrome.runtime.onStartup.addListener(ensureWeatherAlarm);
+ensureWeatherAlarm();
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== WEATHER_ALARM_NAME) return;
+  refreshStoredPlantFromAlarm().catch((error) => console.warn('Plant background weather refresh failed:', error));
 });

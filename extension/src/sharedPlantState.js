@@ -1,6 +1,9 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantState';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
+  const LIGHT_RAIN_MM = 0.25;
+  const MODERATE_RAIN_MM = 4;
+  const HEAVY_RAIN_MM = 12;
   const DAY_MS = 24 * 60 * 60 * 1000;
 
   const DEFAULT_PLANT_STATE = {
@@ -160,9 +163,25 @@
     });
   }
 
+  function getRainfallAmount(weather) {
+    if (!weather) return 0;
+    return Math.max(Number(weather.recentRain || 0), Number(weather.precipitation || 0));
+  }
+
+  function getRainIntensity(weather) {
+    const rainfall = getRainfallAmount(weather);
+    if (rainfall >= HEAVY_RAIN_MM) return 'heavy';
+    if (rainfall >= MODERATE_RAIN_MM) return 'moderate';
+    if (rainfall >= LIGHT_RAIN_MM) return 'light';
+    return 'none';
+  }
+
   function describeWeather(weather) {
     if (!weather) return 'No weather yet';
-    if (weather.recentRain >= 8 || weather.precipitation > 0) return 'Recent rain perked it up';
+    const rainIntensity = getRainIntensity(weather);
+    if (rainIntensity === 'heavy') return 'Heavy rain gave it a strong drink';
+    if (rainIntensity === 'moderate') return 'Rain is steadily rehydrating it';
+    if (rainIntensity === 'light') return 'Light rain helped a little';
     if (weather.temperatureC >= 31) return 'Heat stress is drying the leaves';
     if (weather.windSpeed >= 25) return 'Wind is nudging the branches';
     if (weather.recentSunHours >= 18 && weather.temperatureC >= 16 && weather.temperatureC <= 29) return 'Ideal sun is helping new growth';
@@ -181,10 +200,14 @@
     let mood = 'steady';
 
     if (weather) {
-      if (weather.recentRain >= 8 || weather.precipitation > 0) {
-        hydrationDelta += 28;
-        healthDelta += 6;
-        growthDelta += 6;
+      const rainIntensity = getRainIntensity(weather);
+      if (rainIntensity !== 'none') {
+        const rainfall = getRainfallAmount(weather);
+        const rainRatio = clamp((rainfall - LIGHT_RAIN_MM) / (HEAVY_RAIN_MM - LIGHT_RAIN_MM), 0, 1);
+        const drynessRatio = clamp((50 - state.hydration) / 50, 0, 1);
+        hydrationDelta += 8 + rainRatio * 28 + drynessRatio * rainRatio * 14;
+        healthDelta += 2 + rainRatio * 7;
+        growthDelta += 2 + rainRatio * 8;
         mood = 'rainy';
       }
       if (weather.temperatureC >= 31) {
@@ -230,11 +253,11 @@
     });
   }
 
-  async function refreshPlantStateForWeather() {
+  async function refreshPlantStateForWeather(options = {}) {
     const state = await getStoredPlantState();
     if (!state) return null;
     let weather = state.weather;
-    const needsWeather = shouldRefreshWeather(state);
+    const needsWeather = Boolean(options.force) || shouldRefreshWeather(state);
     const needsElapsedUpdate = Date.now() - Date.parse(state.updatedAt || state.createdAt) > 30 * 60 * 1000;
     if (!needsWeather && !needsElapsedUpdate) return state;
     if (needsWeather) weather = await fetchWeatherForLocation(state.location);
@@ -313,7 +336,7 @@
     return `<svg viewBox="0 0 32 32" role="img" aria-label="${ariaLabel}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="opacity:${opacity}">${rect(15 + lean, stemTop, 2, stemHeight, outline)}${rect(16 + lean, stemTop, 1, stemHeight, stemFill)}${leaves.join('')}${rect(8, 21, 16, 2, outline)}${rect(9, 23, 14, 1, outline)}${rect(10, 24, 12, 5, outline)}${rect(11, 29, 10, 1, outline)}${rect(9, 21, 14, 1, '#e0a14a')}${rect(10, 22, 12, 1, '#b86f35')}${rect(11, 24, 10, 4, '#b86f35')}${rect(11, 24, 3, 4, '#e0a14a')}${rect(18, 25, 3, 3, '#6b3f24')}${rect(12, 29, 8, 1, '#6b3f24')}</svg>`;
   }
 
-  window.PlantCompanionState = {
+  const api = {
     DEFAULT_PLANT_STATE,
     PLANT_TYPES,
     getStoredPlantState,
@@ -322,8 +345,13 @@
     normalizePlantState,
     shouldRefreshWeather,
     fetchWeatherForLocation,
+    getRainfallAmount,
+    getRainIntensity,
     advancePlantState,
     refreshPlantStateForWeather,
     renderPlantSvg,
   };
+
+  globalThis.PlantCompanionState = api;
+  if (typeof window !== 'undefined') window.PlantCompanionState = api;
 })();
