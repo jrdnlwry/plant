@@ -27,7 +27,8 @@
   ],
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://api.open-meteo.com/*",

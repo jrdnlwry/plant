@@ -7,6 +7,8 @@ const plantTypeInput = document.getElementById('plant-type');
 const locationInput = document.getElementById('location');
 const plantPreview = document.getElementById('plant-preview');
 const resetSetup = document.getElementById('reset-setup');
+const refreshWeather = document.getElementById('refresh-weather');
+let weatherStatusMessage = '';
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -17,8 +19,21 @@ function sendPlantMessage(tabId, message) {
   return chrome.tabs.sendMessage(tabId, message);
 }
 
-function setStatus(message) {
+function setStatus(message, options = {}) {
+  if (options.kind === 'weather') weatherStatusMessage = message;
   statusText.textContent = message;
+}
+
+function formatWeatherTime(value) {
+  if (!value) return 'Never';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+}
+
+function formatRainDetails(weather) {
+  if (!weather) return 'No data';
+  const rainfall = window.PlantCompanionState.getRainfallAmount(weather);
+  const intensity = window.PlantCompanionState.getRainIntensity(weather);
+  return `${rainfall.toFixed(1)} mm (${intensity})`;
 }
 
 async function refreshActiveTabPlant() {
@@ -42,10 +57,12 @@ function renderSetup(state) {
   document.getElementById('fact-health').textContent = `${Math.round(state.health)}%`;
   document.getElementById('fact-hydration').textContent = `${Math.round(state.hydration)}%`;
   document.getElementById('fact-weather').textContent = state.weatherSummary;
+  document.getElementById('fact-rain').textContent = formatRainDetails(state.weather);
+  document.getElementById('fact-weather-updated').textContent = formatWeatherTime(state.weatherUpdatedAt);
   document.getElementById('fact-flowers').textContent = String(Math.round(state.flowerCount));
 }
 
-async function syncPlantState() {
+async function syncPlantState(options = {}) {
   const storedState = await window.PlantCompanionState.getStoredPlantState();
   if (!storedState) {
     renderSetup(null);
@@ -55,17 +72,17 @@ async function syncPlantState() {
 
   setStatus('Checking local weather…');
   let weatherError = null;
-  const state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
+  const state = await window.PlantCompanionState.refreshPlantStateForWeather(options).catch((error) => {
     weatherError = error;
     return window.PlantCompanionState.advancePlantState(storedState);
   });
   renderSetup(state);
   if (state.weather) {
-    setStatus(`Updated from ${state.weather.placeName} weather.`);
+    setStatus(`Updated from ${state.weather.placeName} weather. Rain: ${formatRainDetails(state.weather)}.`, { kind: 'weather' });
   } else if (weatherError) {
-    setStatus(`Weather unavailable: ${weatherError.message}. Using elapsed time until weather is available.`);
+    setStatus(`Weather unavailable: ${weatherError.message}. Using elapsed time until weather is available.`, { kind: 'weather' });
   } else {
-    setStatus('Using elapsed time until weather is available.');
+    setStatus('Using elapsed time until weather is available.', { kind: 'weather' });
   }
 }
 
@@ -76,10 +93,10 @@ async function syncToggleFromCurrentTab() {
 
     const response = await sendPlantMessage(tab.id, { type: 'PLANT_GET_VISIBILITY' });
     toggle.checked = response?.isVisible !== false;
-    setStatus(toggle.checked ? 'Plant is visible on this tab.' : 'Plant is hidden on this tab.');
+    setStatus(`${weatherStatusMessage ? `${weatherStatusMessage} ` : ''}${toggle.checked ? 'Plant is visible on this tab.' : 'Plant is hidden on this tab.'}`);
   } catch (_error) {
     toggle.disabled = true;
-    setStatus('Open an ordinary webpage to use the plant overlay.');
+    setStatus(`${weatherStatusMessage ? `${weatherStatusMessage} ` : ''}Open an ordinary webpage to use the plant overlay.`);
   }
 }
 
@@ -107,6 +124,17 @@ setupForm.addEventListener('submit', async (event) => {
   }
 });
 
+refreshWeather.addEventListener('click', async () => {
+  refreshWeather.disabled = true;
+  setStatus('Refreshing weather now…');
+  try {
+    await syncPlantState({ force: true });
+    await refreshActiveTabPlant();
+  } finally {
+    refreshWeather.disabled = false;
+  }
+});
+
 resetSetup.addEventListener('click', async () => {
   const currentState = await window.PlantCompanionState.getStoredPlantState();
   if (currentState) {
@@ -129,7 +157,7 @@ toggle.addEventListener('change', async () => {
     });
 
     toggle.checked = response?.isVisible !== false;
-    setStatus(toggle.checked ? 'Plant is visible on this tab.' : 'Plant is hidden on this tab.');
+    setStatus(`${weatherStatusMessage ? `${weatherStatusMessage} ` : ''}${toggle.checked ? 'Plant is visible on this tab.' : 'Plant is hidden on this tab.'}`);
   } catch (_error) {
     toggle.checked = !toggle.checked;
     setStatus('Could not update this page. Try an ordinary webpage.');
