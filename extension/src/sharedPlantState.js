@@ -1,6 +1,7 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantState';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
+  const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
   const LIGHT_RAIN_MM = 0.25;
   const MODERATE_RAIN_MM = 4;
   const HEAVY_RAIN_MM = 12;
@@ -198,36 +199,39 @@
     let healthDelta = -1.5 * elapsedDays;
     let growthDelta = 5 * elapsedDays;
     let mood = 'steady';
+    let weatherEffectRatio = 0;
 
     if (weather) {
+      const previousWeatherTime = Date.parse(state.weatherUpdatedAt || state.updatedAt || state.createdAt);
+      const elapsedWeatherMs = now - previousWeatherTime;
+      const elapsedWeatherRatio = state.weatherUpdatedAt
+        ? (elapsedWeatherMs >= WEATHER_EFFECT_MIN_ELAPSED_MS ? clamp(elapsedWeatherMs / WEATHER_REFRESH_MS, 0, 1) : 0)
+        : 1;
+      weatherEffectRatio = elapsedWeatherRatio;
       const rainIntensity = getRainIntensity(weather);
       if (rainIntensity !== 'none') {
         const rainfall = getRainfallAmount(weather);
         const rainRatio = clamp((rainfall - LIGHT_RAIN_MM) / (HEAVY_RAIN_MM - LIGHT_RAIN_MM), 0, 1);
         const drynessRatio = clamp((50 - state.hydration) / 50, 0, 1);
-        const previousWeatherTime = Date.parse(state.weatherUpdatedAt || state.updatedAt || state.createdAt);
-        const elapsedWeatherRatio = state.weatherUpdatedAt
-          ? clamp((now - previousWeatherTime) / WEATHER_REFRESH_MS, 0, 1)
-          : 1;
         hydrationDelta += (8 + rainRatio * 28 + drynessRatio * rainRatio * 14) * elapsedWeatherRatio;
         healthDelta += (2 + rainRatio * 7) * elapsedWeatherRatio;
         growthDelta += (2 + rainRatio * 8) * elapsedWeatherRatio;
         mood = 'rainy';
       }
       if (weather.temperatureC >= 31) {
-        hydrationDelta -= 16;
-        healthDelta -= 8;
-        growthDelta -= 3;
+        hydrationDelta -= 16 * elapsedWeatherRatio;
+        healthDelta -= 8 * elapsedWeatherRatio;
+        growthDelta -= 3 * elapsedWeatherRatio;
         mood = 'hot';
       }
       if (weather.recentSunHours >= 18 && weather.temperatureC >= 16 && weather.temperatureC <= 29) {
-        healthDelta += 4;
-        growthDelta += 12;
+        healthDelta += 4 * elapsedWeatherRatio;
+        growthDelta += 12 * elapsedWeatherRatio;
         mood = 'sunny';
       }
       if (weather.windSpeed >= 25) mood = mood === 'steady' ? 'windy' : mood;
       if (weather.recentSunHours < 8 && weather.recentRain < 3) {
-        growthDelta -= 4;
+        growthDelta -= 4 * elapsedWeatherRatio;
         mood = mood === 'steady' ? 'cloudy' : mood;
       }
     }
@@ -240,7 +244,7 @@
       growthStage += 1;
       growthProgress -= 100;
     }
-    const flowerCount = clamp(state.flowerCount + (mood === 'sunny' && health > 70 ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
+    const flowerCount = clamp(state.flowerCount + (mood === 'sunny' && health > 70 && weatherEffectRatio >= 1 ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
 
     return normalizePlantState({
       ...state,
