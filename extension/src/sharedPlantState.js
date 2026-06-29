@@ -205,9 +205,13 @@
         const rainfall = getRainfallAmount(weather);
         const rainRatio = clamp((rainfall - LIGHT_RAIN_MM) / (HEAVY_RAIN_MM - LIGHT_RAIN_MM), 0, 1);
         const drynessRatio = clamp((50 - state.hydration) / 50, 0, 1);
-        hydrationDelta += 8 + rainRatio * 28 + drynessRatio * rainRatio * 14;
-        healthDelta += 2 + rainRatio * 7;
-        growthDelta += 2 + rainRatio * 8;
+        const previousWeatherTime = Date.parse(state.weatherUpdatedAt || state.updatedAt || state.createdAt);
+        const elapsedWeatherRatio = state.weatherUpdatedAt
+          ? clamp((now - previousWeatherTime) / WEATHER_REFRESH_MS, 0, 1)
+          : 1;
+        hydrationDelta += (8 + rainRatio * 28 + drynessRatio * rainRatio * 14) * elapsedWeatherRatio;
+        healthDelta += (2 + rainRatio * 7) * elapsedWeatherRatio;
+        growthDelta += (2 + rainRatio * 8) * elapsedWeatherRatio;
         mood = 'rainy';
       }
       if (weather.temperatureC >= 31) {
