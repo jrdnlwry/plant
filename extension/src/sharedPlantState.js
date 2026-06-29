@@ -3,6 +3,8 @@
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
   const WEATHER_FLOWER_MIN_RATIO = 0.5;
+  const FLOWER_MIN_STAGE_BY_TYPE = { blossom: 4, vine: 4, succulent: 4, sapling: 4, fern: Infinity };
+  const FLOWER_WEATHER_CHANCE_BY_TYPE = { blossom: 1, vine: 0.35, succulent: 0.2, sapling: 0.15, fern: 0 };
   const LIGHT_RAIN_MM = 0.25;
   const MODERATE_RAIN_MM = 4;
   const HEAVY_RAIN_MM = 12;
@@ -247,7 +249,15 @@
       growthStage += 1;
       growthProgress -= 100;
     }
-    const flowerCount = clamp(state.flowerCount + (mood === 'sunny' && health > 70 && weatherEffectRatio >= WEATHER_FLOWER_MIN_RATIO ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
+    const flowerMinStage = FLOWER_MIN_STAGE_BY_TYPE[state.plantType] ?? 4;
+    const flowerChance = FLOWER_WEATHER_CHANCE_BY_TYPE[state.plantType] ?? 0;
+    const flowerRng = createRng(state.seed + growthStage * 4099 + Math.floor(now / DAY_MS));
+    const canAddFlower = growthStage >= flowerMinStage
+      && mood === 'sunny'
+      && health > 70
+      && weatherEffectRatio >= WEATHER_FLOWER_MIN_RATIO
+      && flowerRng() < flowerChance;
+    const flowerCount = clamp(state.flowerCount + (canAddFlower ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
 
     return normalizePlantState({
       ...state,
@@ -338,11 +348,17 @@
       if (stage >= 2) leaves.push(leaf(8, stemTop + 8, 5 + stage, 3, leafFill, highlight, outline, 'left', droop, -lean));
       if (stage >= 3) leaves.push(leaf(18, stemTop + 9, 5 + stage, 3, leafFill, highlight, outline, 'right', droop, lean));
       if (stage >= 4 || isRainy) leaves.push(leaf(11, stemTop + 5, 4 + stage, 2, leafFill, highlight, outline, 'left', Math.max(0, droop - 1), -lean));
-      if (preset.silhouette === 'flower' && stage >= 2) leaves.push(flower(13 + lean, stemTop - 2, preset.highlight, outline));
+      if (preset.silhouette === 'flower' && stage >= 3) {
+        leaves.push(stage >= 4
+          ? flower(13 + lean, stemTop - 2, preset.highlight, outline)
+          : `${rect(14 + lean, stemTop - 1, 2, 2, outline)}${rect(15 + lean, stemTop - 1, 1, 1, preset.highlight)}`);
+      }
     }
 
-    for (let index = 0; index < state.flowerCount; index += 1) {
-      leaves.push(flower(7 + index * 4 + lean, 15 - (index % 2), preset.highlight, outline));
+    if (stage >= (FLOWER_MIN_STAGE_BY_TYPE[state.plantType] ?? 4)) {
+      for (let index = 0; index < state.flowerCount; index += 1) {
+        leaves.push(flower(7 + index * 4 + lean, 15 - (index % 2), preset.highlight, outline));
+      }
     }
 
     const ariaLabel = escapeAttribute(`${preset.label} plant companion for ${state.location || 'your location'}: ${state.weatherSummary}`);
@@ -352,6 +368,7 @@
   const api = {
     DEFAULT_PLANT_STATE,
     PLANT_TYPES,
+    FLOWER_MIN_STAGE_BY_TYPE,
     getStoredPlantState,
     savePlantState,
     createInitialPlantState,
