@@ -2,6 +2,7 @@
   const STORAGE_KEY = 'ambientPlantState';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
+  const WEATHER_FLOWER_MIN_RATIO = 0.5;
   const LIGHT_RAIN_MM = 0.25;
   const MODERATE_RAIN_MM = 4;
   const HEAVY_RAIN_MM = 12;
@@ -152,8 +153,10 @@
 
   function shouldRefreshWeather(state, now = Date.now()) {
     if (!state.location) return false;
-    if (!state.weather || !state.weatherUpdatedAt) return true;
-    return now - Date.parse(state.weatherUpdatedAt) > WEATHER_REFRESH_MS;
+    if (!state.weather) return true;
+    const weatherFetchedAt = state.weather.fetchedAt || state.weatherUpdatedAt;
+    if (!weatherFetchedAt) return true;
+    return now - Date.parse(weatherFetchedAt) > WEATHER_REFRESH_MS;
   }
 
   function fetchWeatherForLocation(location) {
@@ -244,7 +247,7 @@
       growthStage += 1;
       growthProgress -= 100;
     }
-    const flowerCount = clamp(state.flowerCount + (mood === 'sunny' && health > 70 && weatherEffectRatio >= 1 ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
+    const flowerCount = clamp(state.flowerCount + (mood === 'sunny' && health > 70 && weatherEffectRatio >= WEATHER_FLOWER_MIN_RATIO ? 1 : 0) - (health < 35 ? 1 : 0), 0, 5);
 
     return normalizePlantState({
       ...state,
@@ -256,7 +259,9 @@
       weather,
       weatherMood: mood,
       weatherSummary: describeWeather(weather),
-      weatherUpdatedAt: weather?.fetchedAt || state.weatherUpdatedAt,
+      weatherUpdatedAt: weatherEffectRatio > 0 || weather?.fetchedAt !== state.weather?.fetchedAt
+        ? new Date(now).toISOString()
+        : state.weatherUpdatedAt,
       updatedAt: new Date(now).toISOString(),
     });
   }
