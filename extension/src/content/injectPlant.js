@@ -122,18 +122,18 @@
   cleanupCallbacks.push(() => chrome.storage.onChanged.removeListener(handleStorageChange));
 
   const handleMessage = (message, _sender, sendResponse) => {
-    if (message?.type === 'PLANT_SET_VISIBILITY') {
+    if (message?.type === 'PLANT_SET_VISIBILITY' || message?.type === 'PLANT_CURRENT_SET_VISIBILITY') {
       setVisibility(message.isVisible);
       sendResponse({ isVisible: isVisible(), rendererVersion: window.PlantCompanionState.RENDERER_VERSION });
       return true;
     }
 
-    if (message?.type === 'PLANT_REFRESH_STATE') {
+    if (message?.type === 'PLANT_REFRESH_STATE' || message?.type === 'PLANT_CURRENT_REFRESH_STATE') {
       renderStoredPlant(ensureOverlay()).then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
       return true;
     }
 
-    if (message?.type === 'PLANT_GET_VISIBILITY') {
+    if (message?.type === 'PLANT_GET_VISIBILITY' || message?.type === 'PLANT_CURRENT_GET_VISIBILITY') {
       sendResponse({ isVisible: isVisible(), rendererVersion: window.PlantCompanionState.RENDERER_VERSION });
       return true;
     }
