@@ -23,6 +23,22 @@ function isCurrentRenderer(response) {
   return response?.rendererVersion === window.PlantCompanionState.RENDERER_VERSION;
 }
 
+function toCurrentRendererMessage(message) {
+  if (message?.type === 'PLANT_GET_VISIBILITY') {
+    return { ...message, type: 'PLANT_CURRENT_GET_VISIBILITY' };
+  }
+
+  if (message?.type === 'PLANT_SET_VISIBILITY') {
+    return { ...message, type: 'PLANT_CURRENT_SET_VISIBILITY' };
+  }
+
+  if (message?.type === 'PLANT_REFRESH_STATE') {
+    return { ...message, type: 'PLANT_CURRENT_REFRESH_STATE' };
+  }
+
+  return message;
+}
+
 async function injectCurrentCompanion(tabId) {
   await chrome.scripting.insertCSS({
     target: { tabId },
@@ -36,14 +52,15 @@ async function injectCurrentCompanion(tabId) {
 }
 
 async function sendPlantMessageWithCurrentRenderer(tabId, message) {
-  const response = await sendPlantMessage(tabId, message).catch(() => null);
+  const currentMessage = toCurrentRendererMessage(message);
+  const response = await sendPlantMessage(tabId, currentMessage).catch(() => null);
   if (isCurrentRenderer(response)) return response;
 
   await injectCurrentCompanion(tabId);
-  const refreshedResponse = await sendPlantMessage(tabId, message);
-  return isCurrentRenderer(refreshedResponse)
-    ? refreshedResponse
-    : { ...refreshedResponse, rendererVersion: window.PlantCompanionState.RENDERER_VERSION };
+  const refreshedResponse = await sendPlantMessage(tabId, currentMessage);
+  if (isCurrentRenderer(refreshedResponse)) return refreshedResponse;
+
+  throw new Error('Current plant companion renderer did not respond.');
 }
 
 function setStatus(message, options = {}) {
