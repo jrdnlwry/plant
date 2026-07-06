@@ -312,57 +312,218 @@
     return `${rect(x + 1, y, 2, 1, outline)}${rect(x, y + 1, 4, 2, outline)}${rect(x + 1, y + 1, 2, 2, petal)}${rect(x + 1, y + 2, 1, 1, '#f7d35b')}`;
   }
 
-  function renderPlantSvg(stateInput) {
-    const state = normalizePlantState(stateInput);
-    const preset = PLANT_TYPES[state.plantType];
-    const rng = createRng(state.seed + Math.round(state.growthStage) * 997);
+  function pixelKey(x, y) {
+    return `${x},${y}`;
+  }
+
+  function addPixel(pixels, x, y, fill) {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    if (px < 0 || px > 31 || py < 0 || py > 31) return;
+    pixels.set(pixelKey(px, py), fill);
+  }
+
+  function addBlock(pixels, x, y, width, height, fill) {
+    for (let iy = 0; iy < height; iy += 1) {
+      for (let ix = 0; ix < width; ix += 1) addPixel(pixels, x + ix, y + iy, fill);
+    }
+  }
+
+  function drawPixelLine(pixels, x1, y1, x2, y2, fill, thickness = 1) {
+    const steps = Math.max(Math.abs(Math.round(x2 - x1)), Math.abs(Math.round(y2 - y1)), 1);
+    for (let step = 0; step <= steps; step += 1) {
+      const ratio = step / steps;
+      const x = Math.round(x1 + (x2 - x1) * ratio);
+      const y = Math.round(y1 + (y2 - y1) * ratio);
+      addPixel(pixels, x, y, fill);
+      if (thickness > 1) addPixel(pixels, x + 1, y, fill);
+    }
+  }
+
+  function weightedPick(rng, rules) {
+    const total = rules.reduce((sum, rule) => sum + rule.weight, 0);
+    let cursor = rng() * total;
+    for (const rule of rules) {
+      cursor -= rule.weight;
+      if (cursor <= 0) return rule.value;
+    }
+    return rules[rules.length - 1].value;
+  }
+
+  const L_SYSTEM_PRESETS = {
+    fern: {
+      axiom: 'X', angle: 34, step: 2, iterations: 2, startAngle: -90,
+      rules: {
+        X: [
+          { weight: 3, value: 'F[+X]F[-X]+X' },
+          { weight: 2, value: 'F[-X][+X]FX' },
+          { weight: 1, value: 'F[+L]F[-X]X' },
+        ],
+        F: [{ weight: 2, value: 'FF' }, { weight: 1, value: 'F' }],
+      },
+    },
+    vine: {
+      axiom: 'X', angle: 28, step: 2, iterations: 3, startAngle: -96,
+      rules: {
+        X: [
+          { weight: 3, value: 'F[+L]F[-X]FX' },
+          { weight: 2, value: 'F[-L][+X]F' },
+          { weight: 1, value: 'F[+X]F[-L]X' },
+        ],
+        F: [{ weight: 3, value: 'F' }, { weight: 1, value: 'FF' }],
+      },
+    },
+    blossom: {
+      axiom: 'X', angle: 31, step: 2, iterations: 3, startAngle: -90,
+      rules: {
+        X: [
+          { weight: 3, value: 'F[+L]F[-L]B' },
+          { weight: 2, value: 'F[+X][-X]B' },
+          { weight: 1, value: 'F[+B]F[-L]X' },
+        ],
+        F: [{ weight: 2, value: 'FF' }, { weight: 1, value: 'F' }],
+      },
+    },
+    sapling: {
+      axiom: 'X', angle: 24, step: 2, iterations: 3, startAngle: -90,
+      rules: {
+        X: [
+          { weight: 3, value: 'F[+X]F[-X]FC' },
+          { weight: 2, value: 'F[+C][-X]FX' },
+          { weight: 1, value: 'FF[+X][-C]C' },
+        ],
+        F: [{ weight: 3, value: 'F' }, { weight: 2, value: 'FF' }],
+      },
+    },
+    succulent: {
+      axiom: 'A', angle: 45, step: 2, iterations: 2, startAngle: -90,
+      rules: { A: [{ weight: 1, value: 'L[+L][-L][++L][--L]A' }] },
+    },
+  };
+
+  function deriveGrowthParameters(state, preset) {
     const stage = Math.round(state.growthStage);
     const healthRatio = state.health / 100;
     const hydrationRatio = state.hydration / 100;
     const weather = state.weather || {};
-    const isHot = state.weatherMood === 'hot';
-    const isRainy = state.weatherMood === 'rainy';
-    const isSunny = state.weatherMood === 'sunny';
-    const isCloudy = state.weatherMood === 'cloudy';
-    const lean = weather.windSpeed >= 25 ? (weather.windSpeed >= 40 ? 2 : 1) : 0;
-    const droop = Math.round((1 - hydrationRatio) * 4) + (isHot ? 1 : 0) - (isRainy ? 1 : 0);
-    const stemTop = 22 - stage * 4 + Math.round((1 - healthRatio) * 2) + (isCloudy ? 1 : 0);
-    const stemHeight = 22 - stemTop;
-    const leafFill = isHot || hydrationRatio < 0.35 ? '#86a85a' : isRainy ? '#55c767' : preset.leaf;
-    const highlight = isCloudy ? '#7fae68' : isSunny ? '#b6e66b' : preset.highlight;
-    const stemFill = healthRatio < 0.35 ? '#777a45' : preset.stem;
-    const outline = healthRatio < 0.35 ? '#4f5133' : '#1f3b24';
-    const opacity = (0.55 + healthRatio * 0.45).toFixed(2);
-    const leaves = [];
-    const extraClusters = (isRainy || isSunny) && stage >= 2 ? 1 : 0;
+    return {
+      stage,
+      healthRatio,
+      hydrationRatio,
+      lean: weather.windSpeed >= 25 ? (weather.windSpeed >= 40 ? 2 : 1) : 0,
+      droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0),
+      stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem,
+      leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf,
+      highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight,
+      outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24',
+      opacity: (0.55 + healthRatio * 0.45).toFixed(2),
+      stepScale: 0.75 + stage * 0.18,
+      iterations: Math.max(1, Math.min((L_SYSTEM_PRESETS[state.plantType]?.iterations || 2), stage === 1 ? 1 : stage === 2 ? 2 : 3)),
+    };
+  }
 
-    if (preset.silhouette === 'rosette') {
-      leaves.push(leaf(10, 15, 6 + stage + extraClusters, 3, leafFill, highlight, outline, 'left', droop, -lean));
-      leaves.push(leaf(16, 14, 6 + stage + extraClusters, 3, leafFill, highlight, outline, 'right', droop, lean));
-      leaves.push(leaf(12, 11, 5 + stage, 3, leafFill, highlight, outline, 'left', droop, -lean));
-      leaves.push(leaf(15, 10, 5 + stage, 3, leafFill, highlight, outline, 'right', droop, lean));
-      if (stage >= 3) leaves.push(leaf(13, 8, 4 + stage, 3, leafFill, highlight, outline, 'right', droop, lean));
-    } else {
-      leaves.push(leaf(7 - stage, stemTop + 3, 6 + stage + extraClusters, 3, leafFill, highlight, outline, 'left', droop, -lean));
-      leaves.push(leaf(18, stemTop + 2, 6 + stage + extraClusters, 3, leafFill, highlight, outline, 'right', droop, lean));
-      if (stage >= 2) leaves.push(leaf(8, stemTop + 8, 5 + stage, 3, leafFill, highlight, outline, 'left', droop, -lean));
-      if (stage >= 3) leaves.push(leaf(18, stemTop + 9, 5 + stage, 3, leafFill, highlight, outline, 'right', droop, lean));
-      if (stage >= 4 || isRainy) leaves.push(leaf(11, stemTop + 5, 4 + stage, 2, leafFill, highlight, outline, 'left', Math.max(0, droop - 1), -lean));
-      if (preset.silhouette === 'flower' && stage >= 3) {
-        leaves.push(stage >= 4
-          ? flower(13 + lean, stemTop - 2, preset.highlight, outline)
-          : `${rect(14 + lean, stemTop - 1, 2, 2, outline)}${rect(15 + lean, stemTop - 1, 1, 1, preset.highlight)}`);
+  function generateLSystem(state, params) {
+    const config = L_SYSTEM_PRESETS[state.plantType] || L_SYSTEM_PRESETS.fern;
+    const rng = createRng(state.seed + params.stage * 1009 + Math.round(state.growthProgress) * 17);
+    let sentence = config.axiom;
+    for (let index = 0; index < params.iterations; index += 1) {
+      sentence = sentence.split('').map((symbol) => {
+        const rules = config.rules[symbol];
+        return rules ? weightedPick(rng, rules) : symbol;
+      }).join('');
+    }
+    return { sentence, config };
+  }
+
+  function stampLeaf(pixels, x, y, params, direction = 1) {
+    const dy = Math.max(0, params.droop);
+    addPixel(pixels, x, y + dy, params.outline);
+    addPixel(pixels, x + direction, y + dy, params.leafFill);
+    addPixel(pixels, x + direction * 2, y + dy, params.outline);
+    addPixel(pixels, x + direction, y + dy - 1, params.highlight);
+  }
+
+  function stampFlower(pixels, x, y, petal, outline) {
+    addPixel(pixels, x, y - 1, outline);
+    addPixel(pixels, x - 1, y, outline);
+    addPixel(pixels, x, y, petal);
+    addPixel(pixels, x + 1, y, outline);
+    addPixel(pixels, x, y + 1, '#f7d35b');
+  }
+
+  function turtlePixelsFromLSystem(state, params) {
+    const { sentence, config } = generateLSystem(state, params);
+    const rng = createRng(state.seed ^ 0xa53c9e7d ^ params.stage * 313);
+    const pixels = new Map();
+    const stack = [];
+    let turtle = { x: 16 + params.lean, y: 22, angle: config.startAngle + params.lean * 7, width: state.plantType === 'sapling' ? 2 : 1 };
+    const stepLength = config.step * params.stepScale;
+    const angleJitter = 5 + params.stage;
+
+    if (state.plantType === 'succulent') {
+      const leaves = 7 + params.stage * 3;
+      for (let index = 0; index < leaves; index += 1) {
+        const angle = (Math.PI * 2 * index) / leaves + rng() * 0.28;
+        const length = 3 + params.stage + Math.floor(rng() * 3);
+        const x2 = 16 + Math.cos(angle) * length;
+        const y2 = 18 + Math.sin(angle) * Math.max(1.2, length * 0.55) + params.droop;
+        drawPixelLine(pixels, 16, 19, x2, y2, params.outline, 1);
+        drawPixelLine(pixels, 16, 19, x2 - Math.cos(angle), y2, params.leafFill, 1);
+        addPixel(pixels, Math.round((16 + x2) / 2), Math.round((19 + y2) / 2) - 1, params.highlight);
+      }
+      return pixels;
+    }
+
+    for (const symbol of sentence.slice(0, 420)) {
+      if (symbol === 'F') {
+        const rad = turtle.angle * Math.PI / 180;
+        const wind = params.lean * (0.15 + rng() * 0.1);
+        const next = {
+          x: Math.round(turtle.x + Math.cos(rad) * stepLength + wind),
+          y: Math.round(turtle.y + Math.sin(rad) * stepLength + Math.max(0, params.droop) * 0.12),
+        };
+        drawPixelLine(pixels, turtle.x, turtle.y, next.x, next.y, params.outline, turtle.width);
+        if (turtle.width > 1) drawPixelLine(pixels, turtle.x + 1, turtle.y, next.x + 1, next.y, params.stemFill, 1);
+        else addPixel(pixels, next.x, next.y, params.stemFill);
+        turtle.x = next.x; turtle.y = next.y;
+      } else if (symbol === '+') {
+        turtle.angle += config.angle + (rng() - 0.5) * angleJitter;
+      } else if (symbol === '-') {
+        turtle.angle -= config.angle + (rng() - 0.5) * angleJitter;
+      } else if (symbol === '[') {
+        stack.push({ ...turtle, width: Math.max(1, turtle.width - 1) });
+      } else if (symbol === ']') {
+        const leafDirection = turtle.x < 16 ? -1 : 1;
+        if (rng() > 0.25) stampLeaf(pixels, turtle.x, turtle.y, params, leafDirection);
+        turtle = stack.pop() || turtle;
+      } else if (symbol === 'L') {
+        stampLeaf(pixels, turtle.x, turtle.y, params, turtle.x < 16 ? -1 : 1);
+      } else if (symbol === 'B') {
+        if (params.stage >= 3) stampFlower(pixels, turtle.x, turtle.y, state.plantType === 'blossom' ? params.highlight : '#f06ca7', params.outline);
+      } else if (symbol === 'C') {
+        addBlock(pixels, turtle.x - 1, turtle.y - 1, 3, 2, params.outline);
+        addPixel(pixels, turtle.x, turtle.y - 1, params.leafFill);
+        addPixel(pixels, turtle.x + 1, turtle.y - 1, params.highlight);
       }
     }
 
-    if (stage >= (FLOWER_MIN_STAGE_BY_TYPE[state.plantType] ?? 4)) {
-      for (let index = 0; index < state.flowerCount; index += 1) {
-        leaves.push(flower(7 + index * 4 + lean, 15 - (index % 2), preset.highlight, outline));
-      }
+    for (let index = 0; index < state.flowerCount; index += 1) {
+      stampFlower(pixels, 10 + index * 3 + params.lean, 14 - (index % 2), params.highlight, params.outline);
     }
+    return pixels;
+  }
 
-    const ariaLabel = escapeAttribute(`${preset.label} plant companion for ${state.location || 'your location'}: ${state.weatherSummary}`);
-    return `<svg viewBox="0 0 32 32" role="img" aria-label="${ariaLabel}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="opacity:${opacity}">${rect(15 + lean, stemTop, 2, stemHeight, outline)}${rect(16 + lean, stemTop, 1, stemHeight, stemFill)}${leaves.join('')}${rect(8, 21, 16, 2, outline)}${rect(9, 23, 14, 1, outline)}${rect(10, 24, 12, 5, outline)}${rect(11, 29, 10, 1, outline)}${rect(9, 21, 14, 1, '#e0a14a')}${rect(10, 22, 12, 1, '#b86f35')}${rect(11, 24, 10, 4, '#b86f35')}${rect(11, 24, 3, 4, '#e0a14a')}${rect(18, 25, 3, 3, '#6b3f24')}${rect(12, 29, 8, 1, '#6b3f24')}</svg>`;
+  function renderPlantSvg(stateInput) {
+    const state = normalizePlantState(stateInput);
+    const preset = PLANT_TYPES[state.plantType];
+    const params = deriveGrowthParameters(state, preset);
+    const pixels = turtlePixelsFromLSystem(state, params);
+    const plantPixels = Array.from(pixels.entries()).map(([key, fill]) => {
+      const [x, y] = key.split(',');
+      return rect(x, y, 1, 1, fill);
+    }).join('');
+    const ariaLabel = escapeAttribute(`${preset.label} pixel L-system plant companion for ${state.location || 'your location'}: ${state.weatherSummary}`);
+    return `<svg viewBox="0 0 32 32" role="img" aria-label="${ariaLabel}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="opacity:${params.opacity}">${plantPixels}${rect(8, 21, 16, 2, params.outline)}${rect(9, 23, 14, 1, params.outline)}${rect(10, 24, 12, 5, params.outline)}${rect(11, 29, 10, 1, params.outline)}${rect(9, 21, 14, 1, '#e0a14a')}${rect(10, 22, 12, 1, '#b86f35')}${rect(11, 24, 10, 4, '#b86f35')}${rect(11, 24, 3, 4, '#e0a14a')}${rect(18, 25, 3, 3, '#6b3f24')}${rect(12, 29, 8, 1, '#6b3f24')}</svg>`;
   }
 
   const api = {
