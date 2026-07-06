@@ -1,5 +1,15 @@
 (() => {
   const ROOT_ID = 'ambient-plant-companion-root';
+  const existingCompanion = window.__AmbientPlantCompanion;
+
+  if (existingCompanion?.rendererVersion === window.PlantCompanionState.RENDERER_VERSION) {
+    existingCompanion.renderStoredPlant?.();
+    return;
+  }
+
+  existingCompanion?.cleanup?.();
+
+  const cleanupCallbacks = [];
 
   async function renderStoredPlant(root) {
     let state = await window.PlantCompanionState.getStoredPlantState();
@@ -104,28 +114,40 @@
 
   ensureOverlay();
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  const handleStorageChange = (changes, areaName) => {
     if (areaName !== 'local' || !changes.ambientPlantState) return;
     renderStoredPlant(ensureOverlay());
-  });
+  };
+  chrome.storage.onChanged.addListener(handleStorageChange);
+  cleanupCallbacks.push(() => chrome.storage.onChanged.removeListener(handleStorageChange));
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const handleMessage = (message, _sender, sendResponse) => {
     if (message?.type === 'PLANT_SET_VISIBILITY') {
       setVisibility(message.isVisible);
-      sendResponse({ isVisible: isVisible() });
+      sendResponse({ isVisible: isVisible(), rendererVersion: window.PlantCompanionState.RENDERER_VERSION });
       return true;
     }
 
     if (message?.type === 'PLANT_REFRESH_STATE') {
-      renderStoredPlant(ensureOverlay()).then(() => sendResponse({ ok: true }));
+      renderStoredPlant(ensureOverlay()).then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
       return true;
     }
 
     if (message?.type === 'PLANT_GET_VISIBILITY') {
-      sendResponse({ isVisible: isVisible() });
+      sendResponse({ isVisible: isVisible(), rendererVersion: window.PlantCompanionState.RENDERER_VERSION });
       return true;
     }
 
     return false;
-  });
+  };
+  chrome.runtime.onMessage.addListener(handleMessage);
+  cleanupCallbacks.push(() => chrome.runtime.onMessage.removeListener(handleMessage));
+
+  window.__AmbientPlantCompanion = {
+    rendererVersion: window.PlantCompanionState.RENDERER_VERSION,
+    renderStoredPlant: () => renderStoredPlant(ensureOverlay()),
+    cleanup: () => {
+      while (cleanupCallbacks.length) cleanupCallbacks.pop()();
+    },
+  };
 })();

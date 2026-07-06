@@ -19,6 +19,33 @@ function sendPlantMessage(tabId, message) {
   return chrome.tabs.sendMessage(tabId, message);
 }
 
+function isCurrentRenderer(response) {
+  return response?.rendererVersion === window.PlantCompanionState.RENDERER_VERSION;
+}
+
+async function injectCurrentCompanion(tabId) {
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ['src/content/overlay.css'],
+  }).catch(() => {});
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['src/sharedPlantState.js', 'src/content/injectPlant.js'],
+  });
+}
+
+async function sendPlantMessageWithCurrentRenderer(tabId, message) {
+  const response = await sendPlantMessage(tabId, message).catch(() => null);
+  if (isCurrentRenderer(response)) return response;
+
+  await injectCurrentCompanion(tabId);
+  const refreshedResponse = await sendPlantMessage(tabId, message);
+  return isCurrentRenderer(refreshedResponse)
+    ? refreshedResponse
+    : { ...refreshedResponse, rendererVersion: window.PlantCompanionState.RENDERER_VERSION };
+}
+
 function setStatus(message, options = {}) {
   if (options.kind === 'weather') weatherStatusMessage = message;
   statusText.textContent = message;
@@ -39,7 +66,7 @@ function formatRainDetails(weather) {
 async function refreshActiveTabPlant() {
   const tab = await getActiveTab();
   if (tab?.id) {
-    await sendPlantMessage(tab.id, { type: 'PLANT_REFRESH_STATE' }).catch(() => {});
+    await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_REFRESH_STATE' }).catch(() => {});
   }
 }
 
@@ -91,7 +118,7 @@ async function syncToggleFromCurrentTab() {
     const tab = await getActiveTab();
     if (!tab?.id) throw new Error('No active tab found.');
 
-    const response = await sendPlantMessage(tab.id, { type: 'PLANT_GET_VISIBILITY' });
+    const response = await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_GET_VISIBILITY' });
     toggle.checked = response?.isVisible !== false;
     setStatus(`${weatherStatusMessage ? `${weatherStatusMessage} ` : ''}${toggle.checked ? 'Plant is visible on this tab.' : 'Plant is hidden on this tab.'}`);
   } catch (_error) {
@@ -151,7 +178,7 @@ toggle.addEventListener('change', async () => {
     const tab = await getActiveTab();
     if (!tab?.id) throw new Error('No active tab found.');
 
-    const response = await sendPlantMessage(tab.id, {
+    const response = await sendPlantMessageWithCurrentRenderer(tab.id, {
       type: 'PLANT_SET_VISIBILITY',
       isVisible: toggle.checked,
     });
