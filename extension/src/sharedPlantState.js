@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantState';
-  const RENDERER_VERSION = 'l-system-pixel-v1';
+  const RENDERER_VERSION = 'l-system-pixel-v2';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
   const WEATHER_FLOWER_MIN_RATIO = 0.5;
