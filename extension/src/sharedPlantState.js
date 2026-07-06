@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantState';
+  const RENDERER_VERSION = 'l-system-pixel-v1';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
   const WEATHER_FLOWER_MIN_RATIO = 0.5;
@@ -527,6 +528,7 @@
   }
 
   const api = {
+    RENDERER_VERSION,
     DEFAULT_PLANT_STATE,
     PLANT_TYPES,
     FLOWER_MIN_STAGE_BY_TYPE,
