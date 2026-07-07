@@ -6,7 +6,7 @@ A phased browser extension MVP for a small ambient plant companion.
 
 Phase 0 defines the pixel-art design target for the plant companion before the deeper simulation is built. See [`docs/phase-0-pixel-art-design-system.md`](docs/phase-0-pixel-art-design-system.md) for the style guide, palette, shape language, growth-state rules, SVG pixel constraints, and sample plant-type mockups.
 
-Lifecycle milestone ordering for believable plant growth is documented in [`docs/plant-lifecycle-design.md`](docs/plant-lifecycle-design.md).
+Lifecycle milestone ordering for believable plant growth is documented in [`docs/plant-lifecycle-design.md`](docs/plant-lifecycle-design.md), with a visual contact sheet in [`assets/lifecycle-stage-examples.svg`](assets/lifecycle-stage-examples.svg).
 
 ## Phase 1
 
