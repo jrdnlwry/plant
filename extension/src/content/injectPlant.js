@@ -11,20 +11,24 @@
 
   const cleanupCallbacks = [];
 
-  async function renderStoredPlant(root) {
-    let state = await window.PlantCompanionState.getStoredPlantState();
-    if (state) {
-      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
-        console.warn('Plant weather refresh failed:', error);
-        return window.PlantCompanionState.advancePlantState(state);
-      });
-    }
+  function renderPlant(root, stateInput) {
+    const state = stateInput ? window.PlantCompanionState.normalizePlantState(stateInput) : null;
     root.dataset.configured = String(Boolean(state));
     root.innerHTML = state
       ? window.PlantCompanionState.renderPlantSvg(state)
       : '<div class="ambient-plant-placeholder" title="Open Plant Companion to choose your plant">?</div>';
   }
 
+  async function renderStoredPlant(root, options = {}) {
+    let state = await window.PlantCompanionState.getStoredPlantState();
+    if (state && !options.renderOnly) {
+      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
+        console.warn('Plant weather refresh failed:', error);
+        return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(state));
+      });
+    }
+    renderPlant(root, state);
+  }
 
 
   function setOverlayPosition(root, left, top) {
@@ -116,7 +120,7 @@
 
   const handleStorageChange = (changes, areaName) => {
     if (areaName !== 'local' || !changes.ambientPlantState) return;
-    renderStoredPlant(ensureOverlay());
+    renderPlant(ensureOverlay(), changes.ambientPlantState.newValue);
   };
   chrome.storage.onChanged.addListener(handleStorageChange);
   cleanupCallbacks.push(() => chrome.storage.onChanged.removeListener(handleStorageChange));
@@ -129,7 +133,9 @@
     }
 
     if (message?.type === 'PLANT_REFRESH_STATE' || message?.type === 'PLANT_CURRENT_REFRESH_STATE') {
-      renderStoredPlant(ensureOverlay()).then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
+      const root = ensureOverlay();
+      renderStoredPlant(root, { renderOnly: message.renderOnly })
+        .then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
       return true;
     }
 
