@@ -23,6 +23,10 @@ Practical gating principles:
 - Stress should usually pause or regress decorative rewards before it removes the plant's core identity.
 - Recovery should show restored posture and color before brand-new reward features appear.
 
+## Visual lifecycle examples
+
+A companion contact sheet is available at [`assets/lifecycle-stage-examples.svg`](../assets/lifecycle-stage-examples.svg). It shows example pixel-art silhouettes for all seven lifecycle stages across sapling, fern, succulent, blossom, and vine plants. Use it as a visual reference for milestone gating: each row keeps late rewards such as fruit, spores, pups, blooms, and berries out of the early structure-building stages.
+
 ## Sapling
 
 A sapling should read as a young tree: sprout, trunk, branches, leaves, then canopy. Flowers or fruit are rare late-stage bonuses, not the normal reward loop.
