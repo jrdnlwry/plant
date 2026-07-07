@@ -9,6 +9,7 @@ const plantPreview = document.getElementById('plant-preview');
 const resetSetup = document.getElementById('reset-setup');
 const refreshWeather = document.getElementById('refresh-weather');
 let weatherStatusMessage = '';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -68,6 +69,15 @@ function setStatus(message, options = {}) {
   statusText.textContent = message;
 }
 
+function formatElapsedDays(createdAt) {
+  const createdTime = Date.parse(createdAt);
+  if (!Number.isFinite(createdTime)) return 'Unknown';
+
+  const elapsedDays = Math.round(Math.max(0, (Date.now() - createdTime) / DAY_MS) * 10) / 10;
+  const formattedDays = Number.isInteger(elapsedDays) ? String(elapsedDays) : elapsedDays.toFixed(1);
+  return `${formattedDays} ${elapsedDays === 1 ? 'day' : 'days'}`;
+}
+
 function formatWeatherTime(value) {
   if (!value) return 'Never';
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
@@ -97,6 +107,7 @@ function renderSetup(state) {
   plantPreview.innerHTML = window.PlantCompanionState.renderPlantSvg(state);
   document.getElementById('fact-type').textContent = preset.label;
   document.getElementById('fact-location').textContent = state.location;
+  document.getElementById('fact-elapsed-days').textContent = formatElapsedDays(state.createdAt);
   document.getElementById('fact-growth').textContent = `Stage ${state.growthStage} · ${Math.round(state.growthProgress)}%`;
   document.getElementById('fact-health').textContent = `${Math.round(state.health)}%`;
   document.getElementById('fact-hydration').textContent = `${Math.round(state.hydration)}%`;
