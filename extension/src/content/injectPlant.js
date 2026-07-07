@@ -11,12 +11,92 @@
 
   const cleanupCallbacks = [];
 
+  function formatElapsedDays(createdAt) {
+    const createdTime = Date.parse(createdAt);
+    if (!Number.isFinite(createdTime)) return 'Unknown';
+
+    const elapsedDays = Math.max(0, Math.floor((Date.now() - createdTime) / (24 * 60 * 60 * 1000)));
+    return `${elapsedDays} ${elapsedDays === 1 ? 'day' : 'days'}`;
+  }
+
+  function formatRain(state) {
+    const rainAmount = window.PlantCompanionState.getRainfallAmount(state.weather);
+    const rainIntensity = window.PlantCompanionState.getRainIntensity(state.weather);
+    if (rainIntensity === 'none') return `${rainAmount.toFixed(1)} mm recent rain`;
+    return `${rainIntensity} (${rainAmount.toFixed(1)} mm recent rain)`;
+  }
+
+  function formatWeather(state) {
+    const weather = state.weather;
+    if (!weather) return state.weatherSummary || 'No weather yet';
+
+    const details = [];
+    if (Number.isFinite(Number(weather.temperatureC))) details.push(`${Math.round(Number(weather.temperatureC))}°C`);
+    if (Number.isFinite(Number(weather.humidity))) details.push(`${Math.round(Number(weather.humidity))}% humidity`);
+    if (Number.isFinite(Number(weather.windSpeed))) details.push(`${Math.round(Number(weather.windSpeed))} km/h wind`);
+
+    return [state.weatherSummary, details.join(' · ')].filter(Boolean).join(' — ');
+  }
+
+  function statRow(label, value) {
+    const row = document.createElement('div');
+    row.className = 'ambient-plant-stats-row';
+
+    const labelElement = document.createElement('span');
+    labelElement.className = 'ambient-plant-stats-label';
+    labelElement.textContent = label;
+
+    const valueElement = document.createElement('span');
+    valueElement.className = 'ambient-plant-stats-value';
+    valueElement.textContent = value;
+
+    row.append(labelElement, valueElement);
+    return row;
+  }
+
+  function renderStatsPanel(root, state) {
+    let panel = root.querySelector('.ambient-plant-stats-panel');
+    const isOpen = root.dataset.statsOpen === 'true';
+
+    if (!state || !isOpen) {
+      panel?.remove();
+      root.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'ambient-plant-stats-panel';
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-label', 'Plant stats');
+      panel.addEventListener('pointerdown', (event) => event.stopPropagation());
+      panel.addEventListener('dblclick', (event) => event.stopPropagation());
+    }
+
+    panel.replaceChildren(
+      statRow('Elapsed days alive', formatElapsedDays(state.createdAt)),
+      statRow('Location', state.location || 'Not set'),
+      statRow('Growth', `Stage ${Math.round(state.growthStage)} · ${Math.round(state.growthProgress)}%`),
+      statRow('Health', `${Math.round(state.health)}%`),
+      statRow('Hydration', `${Math.round(state.hydration)}%`),
+      statRow('Weather', formatWeather(state)),
+      statRow('Flowers', String(Math.round(state.flowerCount))),
+      statRow('Rain', formatRain(state)),
+    );
+
+    root.appendChild(panel);
+    root.setAttribute('aria-expanded', 'true');
+  }
+
   function renderPlant(root, stateInput) {
     const state = stateInput ? window.PlantCompanionState.normalizePlantState(stateInput) : null;
     root.dataset.configured = String(Boolean(state));
+    root.dataset.hasStats = String(Boolean(state));
     root.innerHTML = state
       ? window.PlantCompanionState.renderPlantSvg(state)
       : '<div class="ambient-plant-placeholder" title="Open Plant Companion to choose your plant">?</div>';
+    root._ambientPlantState = state;
+    renderStatsPanel(root, state);
   }
 
   async function renderStoredPlant(root, options = {}) {
@@ -48,6 +128,15 @@
     root.dataset.dragEnabled = 'true';
 
     let dragState = null;
+
+    root.addEventListener('dblclick', (event) => {
+      if (root.dataset.hasStats !== 'true') return;
+      root.dataset.statsOpen = root.dataset.statsOpen === 'true' ? 'false' : 'true';
+      renderStatsPanel(root, root._ambientPlantState);
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
 
     root.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
@@ -102,6 +191,11 @@
     root = document.createElement('div');
     root.id = ROOT_ID;
     root.dataset.visible = 'true';
+    root.dataset.statsOpen = 'false';
+    root.tabIndex = 0;
+    root.setAttribute('role', 'button');
+    root.setAttribute('aria-label', 'Plant companion overlay. Double click to show stats.');
+    root.setAttribute('aria-expanded', 'false');
     document.documentElement.appendChild(root);
     renderStoredPlant(root, { renderOnly: true });
     enableDragging(root);
