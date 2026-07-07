@@ -80,10 +80,10 @@ function formatRainDetails(weather) {
   return `${rainfall.toFixed(1)} mm (${intensity})`;
 }
 
-async function refreshActiveTabPlant() {
+async function refreshActiveTabPlant(state) {
   const tab = await getActiveTab();
   if (tab?.id) {
-    await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_REFRESH_STATE' }).catch(() => {});
+    await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_REFRESH_STATE', state }).catch(() => {});
   }
 }
 
@@ -111,7 +111,8 @@ async function syncPlantState(options = {}) {
   if (!storedState) {
     renderSetup(null);
     setStatus('Choose a plant type and location to start.');
-    return;
+    await refreshActiveTabPlant(null);
+    return null;
   }
 
   setStatus('Checking local weather…');
@@ -121,6 +122,7 @@ async function syncPlantState(options = {}) {
     return window.PlantCompanionState.advancePlantState(storedState);
   });
   renderSetup(state);
+  await refreshActiveTabPlant(state);
   if (state.weather) {
     setStatus(`Updated from ${state.weather.placeName} weather. Rain: ${formatRainDetails(state.weather)}.`, { kind: 'weather' });
   } else if (weatherError) {
@@ -128,6 +130,7 @@ async function syncPlantState(options = {}) {
   } else {
     setStatus('Using elapsed time until weather is available.', { kind: 'weather' });
   }
+  return state;
 }
 
 async function syncToggleFromCurrentTab() {
@@ -158,7 +161,7 @@ setupForm.addEventListener('submit', async (event) => {
     return savedState;
   });
   renderSetup(refreshedState);
-  await refreshActiveTabPlant();
+  await refreshActiveTabPlant(refreshedState);
   if (refreshedState.weather) {
     setStatus('Plant setup saved with local weather.');
   } else if (weatherError) {
@@ -173,7 +176,6 @@ refreshWeather.addEventListener('click', async () => {
   setStatus('Refreshing weather now…');
   try {
     await syncPlantState({ force: true });
-    await refreshActiveTabPlant();
   } finally {
     refreshWeather.disabled = false;
   }

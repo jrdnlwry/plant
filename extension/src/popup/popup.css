@@ -101,6 +101,7 @@ button {
   height: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  filter: drop-shadow(4px 6px 0 rgba(36, 49, 58, 0.18));
 }
 
 .plant-facts {
