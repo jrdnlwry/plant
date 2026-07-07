@@ -80,10 +80,10 @@ function formatRainDetails(weather) {
   return `${rainfall.toFixed(1)} mm (${intensity})`;
 }
 
-async function refreshActiveTabPlant(state) {
+async function renderStoredPlantOnActiveTab() {
   const tab = await getActiveTab();
   if (tab?.id) {
-    await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_REFRESH_STATE', state }).catch(() => {});
+    await sendPlantMessageWithCurrentRenderer(tab.id, { type: 'PLANT_REFRESH_STATE', renderOnly: true }).catch(() => {});
   }
 }
 
@@ -111,7 +111,7 @@ async function syncPlantState(options = {}) {
   if (!storedState) {
     renderSetup(null);
     setStatus('Choose a plant type and location to start.');
-    await refreshActiveTabPlant(null);
+    await renderStoredPlantOnActiveTab();
     return null;
   }
 
@@ -119,10 +119,10 @@ async function syncPlantState(options = {}) {
   let weatherError = null;
   const state = await window.PlantCompanionState.refreshPlantStateForWeather(options).catch((error) => {
     weatherError = error;
-    return window.PlantCompanionState.advancePlantState(storedState);
+    return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(storedState));
   });
   renderSetup(state);
-  await refreshActiveTabPlant(state);
+  await renderStoredPlantOnActiveTab();
   if (state.weather) {
     setStatus(`Updated from ${state.weather.placeName} weather. Rain: ${formatRainDetails(state.weather)}.`, { kind: 'weather' });
   } else if (weatherError) {
@@ -161,7 +161,7 @@ setupForm.addEventListener('submit', async (event) => {
     return savedState;
   });
   renderSetup(refreshedState);
-  await refreshActiveTabPlant(refreshedState);
+  await renderStoredPlantOnActiveTab();
   if (refreshedState.weather) {
     setStatus('Plant setup saved with local weather.');
   } else if (weatherError) {

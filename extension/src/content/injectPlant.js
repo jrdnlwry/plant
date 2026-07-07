@@ -19,12 +19,12 @@
       : '<div class="ambient-plant-placeholder" title="Open Plant Companion to choose your plant">?</div>';
   }
 
-  async function renderStoredPlant(root) {
+  async function renderStoredPlant(root, options = {}) {
     let state = await window.PlantCompanionState.getStoredPlantState();
-    if (state) {
+    if (state && !options.renderOnly) {
       state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
         console.warn('Plant weather refresh failed:', error);
-        return window.PlantCompanionState.advancePlantState(state);
+        return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(state));
       });
     }
     renderPlant(root, state);
@@ -134,12 +134,8 @@
 
     if (message?.type === 'PLANT_REFRESH_STATE' || message?.type === 'PLANT_CURRENT_REFRESH_STATE') {
       const root = ensureOverlay();
-      if (Object.prototype.hasOwnProperty.call(message, 'state')) {
-        renderPlant(root, message.state);
-        sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION });
-      } else {
-        renderStoredPlant(root).then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
-      }
+      renderStoredPlant(root, { renderOnly: message.renderOnly })
+        .then(() => sendResponse({ ok: true, rendererVersion: window.PlantCompanionState.RENDERER_VERSION }));
       return true;
     }
 
