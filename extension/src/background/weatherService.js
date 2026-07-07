@@ -157,6 +157,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+
+const OVERLAY_SCRIPT_FILES = ['src/sharedPlantState.js', 'src/content/injectPlant.js'];
+const OVERLAY_CSS_FILES = ['src/content/overlay.css'];
+
+function canInjectIntoTab(tab) {
+  return Boolean(tab?.id) && (!tab.url || /^(https?:|file:)/.test(tab.url));
+}
+
+async function injectPlantOverlayIntoTab(tab) {
+  if (!canInjectIntoTab(tab)) return false;
+
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId: tab.id },
+      files: OVERLAY_CSS_FILES,
+    }).catch(() => {});
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: OVERLAY_SCRIPT_FILES,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Plant overlay injection failed:', error);
+    return false;
+  }
+}
+
+async function injectPlantOverlayIntoOpenTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(tabs.map((tab) => injectPlantOverlayIntoTab(tab)));
+}
+
 const WEATHER_ALARM_NAME = 'ambient-plant-weather-refresh';
 const WEATHER_ALARM_MINUTES = 30;
 
@@ -172,9 +205,16 @@ function ensureWeatherAlarm() {
   chrome.alarms.create(WEATHER_ALARM_NAME, { periodInMinutes: WEATHER_ALARM_MINUTES });
 }
 
-chrome.runtime.onInstalled.addListener(ensureWeatherAlarm);
-chrome.runtime.onStartup.addListener(ensureWeatherAlarm);
+chrome.runtime.onInstalled.addListener(() => {
+  ensureWeatherAlarm();
+  injectPlantOverlayIntoOpenTabs().catch((error) => console.warn('Plant overlay reinjection failed:', error));
+});
+chrome.runtime.onStartup.addListener(() => {
+  ensureWeatherAlarm();
+  injectPlantOverlayIntoOpenTabs().catch((error) => console.warn('Plant overlay reinjection failed:', error));
+});
 ensureWeatherAlarm();
+injectPlantOverlayIntoOpenTabs().catch((error) => console.warn('Plant overlay reinjection failed:', error));
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== WEATHER_ALARM_NAME) return;
