@@ -78,7 +78,13 @@ function parseCityState(location) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    throw new Error(`Unable to reach weather service. Check your connection and retry. (${error.message || 'Network request failed'})`);
+  }
+
   if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
   return response.json();
 }

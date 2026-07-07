@@ -103,7 +103,7 @@
     root.id = ROOT_ID;
     root.dataset.visible = 'true';
     document.documentElement.appendChild(root);
-    renderStoredPlant(root);
+    renderStoredPlant(root, { renderOnly: true });
     enableDragging(root);
     return root;
   }
@@ -151,7 +151,7 @@
 
   window.__AmbientPlantCompanion = {
     rendererVersion: window.PlantCompanionState.RENDERER_VERSION,
-    renderStoredPlant: () => renderStoredPlant(ensureOverlay()),
+    renderStoredPlant: (options = {}) => renderStoredPlant(ensureOverlay(), { renderOnly: true, ...options }),
     cleanup: () => {
       while (cleanupCallbacks.length) cleanupCallbacks.pop()();
     },
