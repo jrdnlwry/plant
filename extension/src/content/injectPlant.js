@@ -128,15 +128,31 @@
     root.dataset.dragEnabled = 'true';
 
     let dragState = null;
+    let lastPlantActivation = 0;
+    let ignoreNativeDoubleClickUntil = 0;
+    const DOUBLE_CLICK_MS = 450;
+    const DRAG_THRESHOLD_PX = 4;
 
-    root.addEventListener('dblclick', (event) => {
+    function toggleStatsPanel(event) {
       if (root.dataset.hasStats !== 'true') return;
       root.dataset.statsOpen = root.dataset.statsOpen === 'true' ? 'false' : 'true';
       renderStatsPanel(root, root._ambientPlantState);
-      event.preventDefault();
-      event.stopPropagation();
+      event?.preventDefault();
+      event?.stopPropagation();
+    }
+
+    root.addEventListener('dblclick', (event) => {
+      if (Date.now() < ignoreNativeDoubleClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      toggleStatsPanel(event);
     });
 
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') toggleStatsPanel(event);
+    });
 
     root.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
@@ -146,9 +162,11 @@
         pointerId: event.pointerId,
         offsetX: event.clientX - rect.left,
         offsetY: event.clientY - rect.top,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
       };
 
-      root.dataset.dragging = 'true';
       root.setPointerCapture(event.pointerId);
       event.preventDefault();
     });
@@ -156,7 +174,13 @@
     root.addEventListener('pointermove', (event) => {
       if (!dragState || event.pointerId !== dragState.pointerId) return;
 
-      setOverlayPosition(root, event.clientX - dragState.offsetX, event.clientY - dragState.offsetY);
+      const movedX = Math.abs(event.clientX - dragState.startX);
+      const movedY = Math.abs(event.clientY - dragState.startY);
+      dragState.moved = dragState.moved || movedX > DRAG_THRESHOLD_PX || movedY > DRAG_THRESHOLD_PX;
+      if (dragState.moved) {
+        root.dataset.dragging = 'true';
+        setOverlayPosition(root, event.clientX - dragState.offsetX, event.clientY - dragState.offsetY);
+      }
       event.preventDefault();
     });
 
@@ -167,8 +191,21 @@
         root.releasePointerCapture(event.pointerId);
       }
 
+      const wasClick = !dragState.moved;
       dragState = null;
       root.dataset.dragging = 'false';
+
+      if (wasClick) {
+        const now = Date.now();
+        if (now - lastPlantActivation <= DOUBLE_CLICK_MS) {
+          lastPlantActivation = 0;
+          ignoreNativeDoubleClickUntil = now + 50;
+          toggleStatsPanel(event);
+          return;
+        }
+        lastPlantActivation = now;
+      }
+
       event.preventDefault();
     }
 
