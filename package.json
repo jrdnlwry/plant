@@ -1,0 +1,12 @@
+{
+  "name": "plant-companion",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "validate:extension": "node scripts/validate-extension.mjs",
+    "test": "npm run validate:extension"
+  }
+}
