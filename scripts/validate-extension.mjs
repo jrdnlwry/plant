@@ -1,8 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const extensionRoot = path.resolve('apps/extension');
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(scriptDir, '..');
+const extensionRoot = path.join(repositoryRoot, 'apps/extension');
 const manifestPath = path.join(extensionRoot, 'manifest.json');
 
 function assertFileExists(relativePath, label = relativePath) {
