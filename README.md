@@ -17,7 +17,7 @@ Phase 1 is a Chrome Manifest V3 extension that injects a lightweight static SVG 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
-4. Select the `extension/` directory.
+4. Select the `apps/extension/` directory.
 5. Open an ordinary webpage and use the extension popup to toggle the plant overlay.
 
 Future phases will add persisted plant state, onboarding, deterministic growth, weather, and dynamic SVG rendering.
