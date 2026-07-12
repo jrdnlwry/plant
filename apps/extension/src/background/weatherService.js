@@ -1,4 +1,4 @@
-importScripts('../sharedPlantState.js');
+importScripts('/src/sharedPlantState.js');
 const US_STATE_ABBREVIATIONS = {
   AL: 'Alabama',
   AK: 'Alaska',

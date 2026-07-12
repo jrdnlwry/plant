@@ -8,12 +8,34 @@ const repositoryRoot = path.resolve(scriptDir, '..');
 const extensionRoot = path.join(repositoryRoot, 'apps/extension');
 const manifestPath = path.join(extensionRoot, 'manifest.json');
 
+function normalizeExtensionPath(extensionPath) {
+  return extensionPath.startsWith('/') ? extensionPath.slice(1) : extensionPath;
+}
+
 function assertFileExists(relativePath, label = relativePath) {
-  const absolutePath = path.join(extensionRoot, relativePath);
+  const absolutePath = path.join(extensionRoot, normalizeExtensionPath(relativePath));
 
   if (!existsSync(absolutePath)) {
     throw new Error(`${label} is missing: ${path.relative(process.cwd(), absolutePath)}`);
   }
+}
+
+function collectHtmlResourceFiles(html, htmlPath) {
+  const files = new Set();
+  const htmlDirectory = path.posix.dirname(normalizeExtensionPath(htmlPath));
+  const resourcePattern = /<(?:script|link)\b[^>]*(?:src|href)=['"]([^'"]+)['"][^>]*>/gi;
+
+  for (const match of html.matchAll(resourcePattern)) {
+    const resourcePath = match[1];
+    if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(resourcePath)) continue;
+
+    const normalizedResourcePath = resourcePath.startsWith('/')
+      ? normalizeExtensionPath(resourcePath)
+      : path.posix.normalize(path.posix.join(htmlDirectory, resourcePath));
+    files.add(normalizedResourcePath);
+  }
+
+  return files;
 }
 
 function collectManifestFiles(manifest) {
@@ -52,6 +74,13 @@ async function validateExtension() {
   }
 
   assertFileExists('src/popup/popup.html', 'Popup HTML');
+
+  const popupPath = manifest.action?.default_popup ?? 'src/popup/popup.html';
+  const popupHtml = await readFile(path.join(extensionRoot, normalizeExtensionPath(popupPath)), 'utf8');
+  for (const file of collectHtmlResourceFiles(popupHtml, popupPath)) {
+    assertFileExists(file, `Popup referenced file "${file}"`);
+  }
+
   assertFileExists('src/background/weatherService.js', 'Background service worker');
   assertFileExists('src/sharedPlantState.js', 'Shared plant-state script');
   assertFileExists('src/content/injectPlant.js', 'Content script');
