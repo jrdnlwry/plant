@@ -73,7 +73,10 @@
       panel.addEventListener('dblclick', (event) => event.stopPropagation());
     }
 
+    const plantTypeLabel = window.PlantCompanionState.PLANT_TYPES[state.plantType]?.label || 'Unknown';
+
     panel.replaceChildren(
+      statRow('Plant type', plantTypeLabel),
       statRow('Elapsed days alive', formatElapsedDays(state.createdAt)),
       statRow('Location', state.location || 'Not set'),
       statRow('Growth', `Stage ${Math.round(state.growthStage)} · ${Math.round(state.growthProgress)}%`),
