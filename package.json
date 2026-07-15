@@ -7,6 +7,6 @@
   ],
   "scripts": {
     "validate:extension": "node scripts/validate-extension.mjs",
-    "test": "npm run validate:extension"
+    "test": "npm run validate:extension && node --test"
   }
 }
