@@ -1,5 +1,5 @@
 import { defaultPlantType, isPlantType, type PlantType } from './plantTypes';
-import { normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema';
+import { isWeatherSnapshot, normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema';
 import { plantStateVersion, rendererVersion } from './versions';
 
 export interface PlantStateSnapshot {
@@ -78,7 +78,28 @@ export function normalizePlantStateSnapshot(value: unknown, now = new Date().toI
   };
 }
 
+function hasFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function isPlantStateSnapshot(value: unknown): value is PlantStateSnapshot {
-  const normalized = normalizePlantStateSnapshot(value);
-  return normalized.schemaVersion === plantStateVersion && isPlantType(normalized.plantType);
+  if (!value || typeof value !== 'object') return false;
+
+  const input = value as Record<keyof PlantStateSnapshot, unknown>;
+  return input.schemaVersion === plantStateVersion
+    && input.rendererVersion === rendererVersion
+    && isPlantType(input.plantType)
+    && typeof input.location === 'string'
+    && hasFiniteNumber(input.growthStage) && input.growthStage >= 1 && input.growthStage <= 4
+    && hasFiniteNumber(input.health) && input.health >= 0 && input.health <= 100
+    && hasFiniteNumber(input.hydration) && input.hydration >= 0 && input.hydration <= 100
+    && hasFiniteNumber(input.growthProgress) && input.growthProgress >= 0 && input.growthProgress <= 100
+    && hasFiniteNumber(input.flowerCount) && input.flowerCount >= 0 && input.flowerCount <= 5
+    && typeof input.weatherMood === 'string'
+    && typeof input.weatherSummary === 'string'
+    && (input.weather === null || isWeatherSnapshot(input.weather))
+    && hasFiniteNumber(input.seed)
+    && typeof input.createdAt === 'string' && input.createdAt.length > 0
+    && typeof input.updatedAt === 'string' && input.updatedAt.length > 0
+    && (input.weatherUpdatedAt === null || typeof input.weatherUpdatedAt === 'string');
 }
