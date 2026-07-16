@@ -33,6 +33,22 @@ export function normalizeWeatherSnapshot(value: unknown): WeatherSnapshot | null
   };
 }
 
+function hasFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function isWeatherSnapshot(value: unknown): value is WeatherSnapshot {
-  return Boolean(normalizeWeatherSnapshot(value));
+  if (!value || typeof value !== 'object') return false;
+
+  const input = value as Record<keyof WeatherSnapshot, unknown>;
+  return (input.placeName === undefined || typeof input.placeName === 'string')
+    && hasFiniteNumber(input.temperatureC)
+    && hasFiniteNumber(input.humidity)
+    && hasFiniteNumber(input.precipitation)
+    && hasFiniteNumber(input.weatherCode)
+    && hasFiniteNumber(input.windSpeed)
+    && typeof input.isDay === 'boolean'
+    && hasFiniteNumber(input.recentRain)
+    && hasFiniteNumber(input.recentSunHours)
+    && typeof input.fetchedAt === 'string' && input.fetchedAt.length > 0;
 }
