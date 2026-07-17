@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { isPlantStateSnapshot, PLANT_STATE_SCHEMA_VERSION } from '@plant/plant-core';
 import { checkRenderCompatibility, createPlantRenderModel, renderPlantSvg, SUPPORTED_RENDERER_VERSION } from './index.ts';
 import { deterministicPlantStateFixture } from './testing/fixture.ts';
@@ -20,15 +23,16 @@ test('wrong schema version is an invalid snapshot, distinct from renderer incomp
 test('unsupported renderer version produces clear compatibility failure', () => {
   assert.deepEqual(checkRenderCompatibility({ ...deterministicPlantStateFixture, rendererVersion: 'old-renderer' }), { supported: false, reason: 'unsupported-renderer-version', receivedVersion: 'old-renderer', supportedVersion: SUPPORTED_RENDERER_VERSION });
 });
-import { readFileSync } from 'node:fs';
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+const readRepoFile = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
 
 test('extension popup and overlay call the canonical extension rendering entry point', () => {
-  assert.match(readFileSync(`${process.cwd()}/apps/extension/src/popup/popup.js`, 'utf8'), /PlantCompanionState\.renderPlantSvg/);
-  assert.match(readFileSync(`${process.cwd()}/apps/extension/src/content/injectPlant.js`, 'utf8'), /PlantCompanionState\.renderPlantSvg/);
+  assert.match(readRepoFile('apps/extension/src/popup/popup.js'), /PlantCompanionState\.renderPlantSvg/);
+  assert.match(readRepoFile('apps/extension/src/content/injectPlant.js'), /PlantCompanionState\.renderPlantSvg/);
 });
 
 test('website does not contain a copied renderer implementation or extension storage dependency', () => {
-  const preview = readFileSync(`${process.cwd()}/apps/web/app/garden/preview/page.tsx`, 'utf8');
+  const preview = readRepoFile('apps/web/app/garden/preview/page.tsx');
   assert.match(preview, /@plant\/plant-renderer/);
   assert.doesNotMatch(preview, /chrome\.storage|Date\.now\(|Math\.random\(|advancePlantState|fetch\(/);
 });
