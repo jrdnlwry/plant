@@ -7,6 +7,10 @@
   ],
   "scripts": {
     "validate:extension": "node scripts/validate-extension.mjs",
-    "test": "npm run validate:extension && node --test"
+    "test": "npm run validate:extension && node --test && npm run test:web",
+    "dev:web": "npm --workspace @plant/web run dev",
+    "build:web": "npm --workspace @plant/web run build",
+    "test:web": "npm --workspace @plant/web test",
+    "typecheck:web": "npm --workspace @plant/web run typecheck"
   }
 }
