@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isPlantStateSnapshot, PLANT_STATE_SCHEMA_VERSION } from '@plant/plant-core';
@@ -23,8 +22,11 @@ test('wrong schema version is an invalid snapshot, distinct from renderer incomp
 test('unsupported renderer version produces clear compatibility failure', () => {
   assert.deepEqual(checkRenderCompatibility({ ...deterministicPlantStateFixture, rendererVersion: 'old-renderer' }), { supported: false, reason: 'unsupported-renderer-version', receivedVersion: 'old-renderer', supportedVersion: SUPPORTED_RENDERER_VERSION });
 });
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const readRepoFile = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
+function readRepoFile(relativePath: string): string {
+  const filePath = fileURLToPath(new URL(`../../../${relativePath}`, import.meta.url));
+
+  return readFileSync(filePath, 'utf8');
+}
 
 test('extension popup and overlay call the canonical extension rendering entry point', () => {
   assert.match(readRepoFile('apps/extension/src/popup/popup.js'), /PlantCompanionState\.renderPlantSvg/);
