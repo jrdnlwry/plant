@@ -1,0 +1,31 @@
+import { PLANT_STATE_SCHEMA_VERSION, rendererVersion, type PlantStateSnapshot } from '@plant/plant-core';
+
+export const deterministicPlantStateFixture = {
+  schemaVersion: PLANT_STATE_SCHEMA_VERSION,
+  rendererVersion,
+  plantType: 'blossom',
+  location: 'Fixture Garden',
+  growthStage: 3,
+  health: 92,
+  hydration: 78,
+  growthProgress: 42,
+  flowerCount: 2,
+  weatherMood: 'sunny',
+  weatherSummary: 'Deterministic fixture weather',
+  weather: {
+    placeName: 'Fixture Garden',
+    temperatureC: 22,
+    humidity: 55,
+    precipitation: 0,
+    weatherCode: 1,
+    windSpeed: 8,
+    isDay: true,
+    recentRain: 1.2,
+    recentSunHours: 18,
+    fetchedAt: '2026-01-15T12:00:00.000Z',
+  },
+  seed: 123456789,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-15T12:00:00.000Z',
+  weatherUpdatedAt: '2026-01-15T12:00:00.000Z',
+} as const satisfies PlantStateSnapshot;

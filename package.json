@@ -11,6 +11,8 @@
     "dev:web": "npm --workspace @plant/web run dev",
     "build:web": "npm --workspace @plant/web run build",
     "test:web": "npm --workspace @plant/web test",
-    "typecheck:web": "npm --workspace @plant/web run typecheck"
+    "typecheck:web": "npm --workspace @plant/web run typecheck",
+    "test:renderer": "npm --workspace @plant/plant-renderer test",
+    "typecheck:renderer": "npm --workspace @plant/plant-renderer run typecheck"
   }
 }
