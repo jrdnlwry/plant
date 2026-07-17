@@ -83,3 +83,21 @@ p {
 }
 
 .contract-card dd { margin: 0; font-size: 1.1rem; }
+
+.preview-card {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  align-items: center;
+  border: 1px solid #d8e7c8;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: #fbfff7;
+}
+
+.fixture-plant-svg {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}

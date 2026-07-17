@@ -1,0 +1,17 @@
+{
+  "name": "@plant/plant-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/fixture.ts"
+  },
+  "dependencies": {
+    "@plant/plant-core": "0.1.0"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}
