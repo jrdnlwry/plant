@@ -1,5 +1,5 @@
-import { normalizePlantStateSnapshot, type PlantStateSnapshot } from './plantSchema';
-import { normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema';
+import { normalizePlantStateSnapshot, type PlantStateSnapshot } from './plantSchema.ts';
+import { normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema.ts';
 
 export function serializePlantStateSnapshot(snapshot: PlantStateSnapshot): string {
   return JSON.stringify(normalizePlantStateSnapshot(snapshot));

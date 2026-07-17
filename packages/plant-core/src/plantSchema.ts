@@ -1,6 +1,6 @@
-import { defaultPlantType, isPlantType, type PlantType } from './plantTypes';
-import { isWeatherSnapshot, normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema';
-import { plantStateVersion, rendererVersion } from './versions';
+import { defaultPlantType, isPlantType, type PlantType } from './plantTypes.ts';
+import { isWeatherSnapshot, normalizeWeatherSnapshot, type WeatherSnapshot } from './weatherSchema.ts';
+import { plantStateVersion, rendererVersion } from './versions.ts';
 
 export interface PlantStateSnapshot {
   schemaVersion: typeof plantStateVersion;
