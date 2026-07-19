@@ -15,6 +15,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Link href="/" className="brand">Plant Companion</Link>
           <nav aria-label="Primary navigation">
             <Link href="/garden">Garden</Link>
+            {' · '}
+            <Link href="/auth/sign-in">Sign in</Link>
+            {' · '}
+            <Link href="/account">Account</Link>
           </nav>
         </header>
         <main>{children}</main>
