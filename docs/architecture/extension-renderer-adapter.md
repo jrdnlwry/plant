@@ -190,13 +190,14 @@ The current architecture supports a narrow package-to-classic-script bridge:
 1. Generate a local classic browser-global artifact from
    `@plant/plant-renderer` and its package dependencies.
 2. Expose only the package renderer contract needed at runtime (including
-   compatibility checking, model creation, SVG rendering, and version
-   constants) on a renderer-specific global.
+   snapshot normalization, compatibility checking, model creation, SVG
+   rendering, and version constants) on a renderer-specific global.
 3. Load that artifact before `sharedPlantState.js` in the popup, content-script
    declarations, programmatic injection paths, and classic service worker if the
    shared-state facade requires it there.
 4. Preserve `window.PlantCompanionState` as the extension compatibility facade,
-   but make its renderer members delegate to the package-derived global.
+   but make its renderer members normalize extension state and then delegate to
+   the package-derived global.
 5. Delete the renderer implementation from `sharedPlantState.js`; do not keep a
    fallback copy, because a fallback would recreate the dual-maintenance risk.
 6. Extend validation/tests to prove the artifact is current, locally packaged,
@@ -209,6 +210,29 @@ plant snapshot as canonical state: SVG remains derived, disposable output, and
 the renderer does not gain access to Chrome storage, weather retrieval, or
 lifecycle mutation.
 
+### State normalization at the facade
+
+The existing extension normalizer does not add `schemaVersion` or
+`rendererVersion`, while `@plant/plant-renderer` accepts only a strict current
+`PlantStateSnapshot`. Directly passing an extension state to the package would
+therefore fail compatibility checking before rendering. The facade's renderer
+methods must first pass the state through the package-derived
+`normalizePlantStateSnapshot` (or an equivalent explicit migration bundled from
+`@plant/plant-core`) and delegate only the resulting snapshot. That conversion
+must add the current schema and renderer versions, preserve the extension's
+canonical fields, normalize nested weather data, and return a new value rather
+than mutating the stored state supplied by the caller.
+
+This conversion belongs at the compatibility facade rather than in the strict
+renderer. It allows both previously stored unversioned extension states and
+newly created states to render, while keeping the package renderer's rejection
+of invalid or unsupported snapshots intact. A later persisted schema version
+must receive an explicit migration policy rather than being passed through or
+silently treated as current. Tests for the adapter should cover an unversioned
+stored fixture, a newly created extension state, version fields on the delegated
+snapshot, weather normalization, input non-mutation, and the behavior for an
+explicit unsupported future version.
+
 ## Audit conclusion
 
 A plain, self-contained browser-global JavaScript artifact is compatible with
@@ -217,5 +241,6 @@ It must be loaded independently in the popup and content-script isolated world;
 the service worker also needs explicit loading if the shared-state facade has a
 load-time renderer dependency. No ESM migration is required. The critical
 implementation risks are inconsistent ordering across the declarative and two
-programmatic injection paths, accidental retention of the legacy renderer, and
-an unverified committed artifact drifting from the shared package.
+programmatic injection paths, delegation of unversioned extension state without
+normalization, accidental retention of the legacy renderer, and an unverified
+committed artifact drifting from the shared package.
