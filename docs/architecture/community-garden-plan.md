@@ -27,6 +27,10 @@ These are selected decisions for future phases, not implemented behavior in Phas
 
 ## Remaining unresolved decisions
 
+The Phase 0.9 identity and publication boundaries resolve the conceptual items below; see
+[`identity-publishing-synchronization-boundaries.md`](./identity-publishing-synchronization-boundaries.md).
+Provider-specific implementation remains deferred.
+
 - Extension authentication flow.
 - Extension-to-web account linking.
 - Synchronization ownership.
