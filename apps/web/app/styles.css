@@ -101,3 +101,10 @@ p {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+form { display: grid; gap: 1rem; max-width: 34rem; }
+label { display: grid; gap: .4rem; font-weight: 700; }
+input, select, button { font: inherit; padding: .75rem; border: 1px solid #78906f; border-radius: .5rem; }
+button { cursor: pointer; font-weight: 700; background: #315b2d; color: white; }
+.feedback { padding: .75rem; border-radius: .5rem; background: #e5efdf; }
+.error { background: #f8dfdc; color: #75241d; }

@@ -111,3 +111,20 @@ npm run verify:extension-renderer
 ```
 
 Verification is read-only and fails when the committed artifact is missing or stale.
+# Plant Companion
+
+## Website authentication (Phase 1.0)
+
+The website uses Supabase passwordless email magic links. Local extension use remains anonymous and
+unchanged. See [the website authentication foundation](docs/architecture/website-auth-foundation.md)
+for project setup, environment boundaries, migrations, RLS verification, and the manual test checklist.
+
+Quick start:
+
+1. Install the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started),
+   run `npm run supabase:start`, then `npm run supabase:reset`.
+2. Copy `apps/web/.env.example` to `apps/web/.env.local`; use `supabase status` for the local URL and
+   anonymous key and set the site URL to `http://localhost:3000`.
+3. Run `npm run dev:web`, visit `/auth/sign-in`, and use the local Mailpit URL reported by the CLI.
+4. Run fast checks with `npm run test:auth`; database assertions are separate (`npm run test:db`) and
+   require the local Docker stack.

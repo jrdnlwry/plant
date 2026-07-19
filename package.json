@@ -13,8 +13,13 @@
     "dev:web": "npm --workspace @plant/web run dev",
     "build:web": "npm --workspace @plant/web run build",
     "test:web": "npm --workspace @plant/web test",
+    "test:auth": "npm --workspace @plant/web run test:auth",
     "typecheck:web": "npm --workspace @plant/web run typecheck",
     "test:renderer": "npm --workspace @plant/plant-renderer test",
-    "typecheck:renderer": "npm --workspace @plant/plant-renderer run typecheck"
+    "typecheck:renderer": "npm --workspace @plant/plant-renderer run typecheck",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "test:db": "supabase test db"
   }
 }

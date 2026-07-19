@@ -1,0 +1,14 @@
+begin;
+select plan(10);
+select has_table('public', 'account_profiles', 'private profile table exists');
+select has_table('public', 'public_contributors', 'contributor table exists');
+select has_check('public', 'account_profiles', 'account_profiles_first_name_characters', 'private profile enforces the first-name character allowlist');
+select has_check('public', 'public_contributors', 'public_contributors_first_name_characters', 'synced contributor name enforces the character allowlist');
+select row_security_active('public.account_profiles'::regclass), 'profile RLS active';
+select row_security_active('public.public_contributors'::regclass), 'contributor RLS active';
+select has_column('public', 'public_contributor_projection', 'public_contributor_id', 'projection has public ID');
+select col_not_exists('public', 'public_contributor_projection', 'account_id', 'projection omits account ID');
+select col_not_exists('public', 'account_profiles', 'latitude', 'profiles omit exact latitude');
+select col_not_exists('public', 'account_profiles', 'longitude', 'profiles omit exact longitude');
+select * from finish();
+rollback;
