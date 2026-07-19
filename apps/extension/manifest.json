@@ -16,6 +16,7 @@
         "<all_urls>"
       ],
       "js": [
+        "src/generated/plantRenderer.global.js",
         "src/sharedPlantState.js",
         "src/content/injectPlant.js"
       ],

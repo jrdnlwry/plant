@@ -48,7 +48,7 @@ async function injectCurrentCompanion(tabId) {
 
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ['src/sharedPlantState.js', 'src/content/injectPlant.js'],
+    files: ['src/generated/plantRenderer.global.js', 'src/sharedPlantState.js', 'src/content/injectPlant.js'],
   });
 }
 

@@ -82,9 +82,39 @@ async function validateExtension() {
   }
 
   assertFileExists('src/background/weatherService.js', 'Background service worker');
+  assertFileExists('src/generated/plantRenderer.global.js', 'Generated renderer artifact');
   assertFileExists('src/sharedPlantState.js', 'Shared plant-state script');
   assertFileExists('src/content/injectPlant.js', 'Content script');
   assertFileExists('src/content/overlay.css', 'Content CSS');
+
+  const expectedScripts = [
+    'src/generated/plantRenderer.global.js',
+    'src/sharedPlantState.js',
+    'src/content/injectPlant.js',
+  ];
+  const popupScripts = [...popupHtml.matchAll(/<script\b[^>]*src=['"]([^'"]+)['"][^>]*>/gi)]
+    .map((match) => normalizeExtensionPath(match[1]));
+  const popupExpected = expectedScripts.slice(0, 2).concat('src/popup/popup.js');
+  if (JSON.stringify(popupScripts) !== JSON.stringify(popupExpected)) {
+    throw new Error(`Popup script order must be: ${popupExpected.join(', ')}`);
+  }
+  for (const contentScript of manifest.content_scripts ?? []) {
+    if (JSON.stringify(contentScript.js ?? []) !== JSON.stringify(expectedScripts)) {
+      throw new Error(`Content script order must be: ${expectedScripts.join(', ')}`);
+    }
+  }
+
+  const background = await readFile(path.join(extensionRoot, manifest.background.service_worker), 'utf8');
+  if (!/^importScripts\(\s*['"]\/src\/generated\/plantRenderer\.global\.js['"]\s*,\s*['"]\/src\/sharedPlantState\.js['"]\s*\);/.test(background)) {
+    throw new Error('Service worker must import the generated renderer before sharedPlantState.js.');
+  }
+  const generated = await readFile(path.join(extensionRoot, 'src/generated/plantRenderer.global.js'), 'utf8');
+  if (/^\s*(?:import|export)\s/m.test(generated)) {
+    throw new Error('Generated renderer must not contain ESM imports or exports.');
+  }
+  if (!generated.startsWith('// Generated from packages/plant-renderer.')) {
+    throw new Error('Generated renderer header is missing.');
+  }
 
   console.log('Extension manifest and referenced files are valid.');
 }

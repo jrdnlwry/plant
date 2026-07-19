@@ -288,243 +288,43 @@
     return savePlantState(advancePlantState(state, weather));
   }
 
-  function escapeAttribute(value) {
-    return String(value).replace(/[&"<>]/g, (char) => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char]);
-  }
-
-  function rect(x, y, width, height, fill, extra = '') {
-    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" ${extra}/>`;
-  }
-
-  function leaf(x, y, width, height, fill, highlight, outline, direction, droop, lean = 0) {
-    const endY = y + droop;
-    const lx = x + lean;
-    const bodyX = direction === 'left' ? lx : lx + 1;
-    const tipX = direction === 'left' ? lx - 1 : lx + width - 1;
-    return [
-      rect(Math.min(tipX, lx), endY, width + 1, 1, outline),
-      rect(lx, endY + 1, width, height, outline),
-      rect(bodyX, endY + 1, width - 1, height - 1, fill),
-      rect(direction === 'left' ? lx : lx + width - 2, endY + 1, 2, 1, highlight),
-    ].join('');
-  }
-
-  function flower(x, y, petal, outline) {
-    return `${rect(x + 1, y, 2, 1, outline)}${rect(x, y + 1, 4, 2, outline)}${rect(x + 1, y + 1, 2, 2, petal)}${rect(x + 1, y + 2, 1, 1, '#f7d35b')}`;
-  }
-
-  function pixelKey(x, y) {
-    return `${x},${y}`;
-  }
-
-  function addPixel(pixels, x, y, fill) {
-    const px = Math.round(x);
-    const py = Math.round(y);
-    if (px < 0 || px > 31 || py < 0 || py > 31) return;
-    pixels.set(pixelKey(px, py), fill);
-  }
-
-  function addBlock(pixels, x, y, width, height, fill) {
-    for (let iy = 0; iy < height; iy += 1) {
-      for (let ix = 0; ix < width; ix += 1) addPixel(pixels, x + ix, y + iy, fill);
+  function toRenderablePlantSnapshot(extensionState) {
+    const renderer = globalThis.PlantCompanionRenderer;
+    if (!renderer) throw new Error('Plant renderer adapter is not loaded.');
+    if (!extensionState || typeof extensionState !== 'object' || Array.isArray(extensionState)) {
+      throw new TypeError('Invalid legacy plant state.');
     }
-  }
 
-  function drawPixelLine(pixels, x1, y1, x2, y2, fill, thickness = 1) {
-    const steps = Math.max(Math.abs(Math.round(x2 - x1)), Math.abs(Math.round(y2 - y1)), 1);
-    for (let step = 0; step <= steps; step += 1) {
-      const ratio = step / steps;
-      const x = Math.round(x1 + (x2 - x1) * ratio);
-      const y = Math.round(y1 + (y2 - y1) * ratio);
-      addPixel(pixels, x, y, fill);
-      if (thickness > 1) addPixel(pixels, x + 1, y, fill);
+    const hasSchemaVersion = Object.prototype.hasOwnProperty.call(extensionState, 'schemaVersion');
+    const hasRendererVersion = Object.prototype.hasOwnProperty.call(extensionState, 'rendererVersion');
+    if (hasSchemaVersion && extensionState.schemaVersion !== renderer.plantStateVersion) {
+      throw new Error(`Unsupported plant state schema version: ${String(extensionState.schemaVersion)}`);
     }
-  }
-
-  function weightedPick(rng, rules) {
-    const total = rules.reduce((sum, rule) => sum + rule.weight, 0);
-    let cursor = rng() * total;
-    for (const rule of rules) {
-      cursor -= rule.weight;
-      if (cursor <= 0) return rule.value;
+    if (hasRendererVersion && extensionState.rendererVersion !== renderer.rendererVersion) {
+      throw new Error(`Unsupported plant renderer version: ${String(extensionState.rendererVersion)}`);
     }
-    return rules[rules.length - 1].value;
-  }
+    if (!PLANT_TYPES[extensionState.plantType] || typeof extensionState.location !== 'string') {
+      throw new TypeError('Invalid legacy plant state.');
+    }
 
-  const L_SYSTEM_PRESETS = {
-    fern: {
-      axiom: 'X', angle: 34, step: 2, iterations: 2, startAngle: -90,
-      rules: {
-        X: [
-          { weight: 3, value: 'F[+X]F[-X]+X' },
-          { weight: 2, value: 'F[-X][+X]FX' },
-          { weight: 1, value: 'F[+L]F[-X]X' },
-        ],
-        F: [{ weight: 2, value: 'FF' }, { weight: 1, value: 'F' }],
-      },
-    },
-    vine: {
-      axiom: 'X', angle: 28, step: 2, iterations: 3, startAngle: -96,
-      rules: {
-        X: [
-          { weight: 3, value: 'F[+L]F[-X]FX' },
-          { weight: 2, value: 'F[-L][+X]F' },
-          { weight: 1, value: 'F[+X]F[-L]X' },
-        ],
-        F: [{ weight: 3, value: 'F' }, { weight: 1, value: 'FF' }],
-      },
-    },
-    blossom: {
-      axiom: 'X', angle: 31, step: 2, iterations: 3, startAngle: -90,
-      rules: {
-        X: [
-          { weight: 3, value: 'F[+L]F[-L]B' },
-          { weight: 2, value: 'F[+X][-X]B' },
-          { weight: 1, value: 'F[+B]F[-L]X' },
-        ],
-        F: [{ weight: 2, value: 'FF' }, { weight: 1, value: 'F' }],
-      },
-    },
-    sapling: {
-      axiom: 'X', angle: 24, step: 2, iterations: 3, startAngle: -90,
-      rules: {
-        X: [
-          { weight: 3, value: 'F[+X]F[-X]FC' },
-          { weight: 2, value: 'F[+C][-X]FX' },
-          { weight: 1, value: 'FF[+X][-C]C' },
-        ],
-        F: [{ weight: 3, value: 'F' }, { weight: 2, value: 'FF' }],
-      },
-    },
-    succulent: {
-      axiom: 'A', angle: 45, step: 2, iterations: 2, startAngle: -90,
-      rules: { A: [{ weight: 1, value: 'L[+L][-L][++L][--L]A' }] },
-    },
-  };
-
-  function deriveGrowthParameters(state, preset) {
-    const stage = Math.round(state.growthStage);
-    const healthRatio = state.health / 100;
-    const hydrationRatio = state.hydration / 100;
-    const weather = state.weather || {};
-    return {
-      stage,
-      healthRatio,
-      hydrationRatio,
-      lean: weather.windSpeed >= 25 ? (weather.windSpeed >= 40 ? 2 : 1) : 0,
-      droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0),
-      stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem,
-      leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf,
-      highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight,
-      outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24',
-      opacity: (0.55 + healthRatio * 0.45).toFixed(2),
-      stepScale: 0.75 + stage * 0.18,
-      iterations: Math.max(1, Math.min((L_SYSTEM_PRESETS[state.plantType]?.iterations || 2), stage === 1 ? 1 : stage === 2 ? 2 : 3)),
+    // Seedless extension data historically rendered with RNG seed zero. Preserve
+    // that appearance rather than applying the package's general hash fallback.
+    const migrationInput = {
+      ...extensionState,
+      seed: Number.isFinite(Number(extensionState.seed)) ? Number(extensionState.seed) >>> 0 : 0,
     };
+    const snapshot = renderer.normalizePlantStateSnapshot(migrationInput);
+    if (!renderer.isPlantStateSnapshot(snapshot)) throw new TypeError('Invalid plant state snapshot.');
+    return snapshot;
   }
 
-  function generateLSystem(state, params) {
-    const config = L_SYSTEM_PRESETS[state.plantType] || L_SYSTEM_PRESETS.fern;
-    const rng = createRng(state.seed + params.stage * 1009 + Math.round(state.growthProgress) * 17);
-    let sentence = config.axiom;
-    for (let index = 0; index < params.iterations; index += 1) {
-      sentence = sentence.split('').map((symbol) => {
-        const rules = config.rules[symbol];
-        return rules ? weightedPick(rng, rules) : symbol;
-      }).join('');
-    }
-    return { sentence, config };
-  }
-
-  function stampLeaf(pixels, x, y, params, direction = 1) {
-    const dy = Math.max(0, params.droop);
-    addPixel(pixels, x, y + dy, params.outline);
-    addPixel(pixels, x + direction, y + dy, params.leafFill);
-    addPixel(pixels, x + direction * 2, y + dy, params.outline);
-    addPixel(pixels, x + direction, y + dy - 1, params.highlight);
-  }
-
-  function stampFlower(pixels, x, y, petal, outline) {
-    addPixel(pixels, x, y - 1, outline);
-    addPixel(pixels, x - 1, y, outline);
-    addPixel(pixels, x, y, petal);
-    addPixel(pixels, x + 1, y, outline);
-    addPixel(pixels, x, y + 1, '#f7d35b');
-  }
-
-  function turtlePixelsFromLSystem(state, params) {
-    const { sentence, config } = generateLSystem(state, params);
-    const rng = createRng(state.seed ^ 0xa53c9e7d ^ params.stage * 313);
-    const pixels = new Map();
-    const stack = [];
-    let turtle = { x: 16 + params.lean, y: 22, angle: config.startAngle + params.lean * 7, width: state.plantType === 'sapling' ? 2 : 1 };
-    const stepLength = config.step * params.stepScale;
-    const angleJitter = 5 + params.stage;
-
-    if (state.plantType === 'succulent') {
-      const leaves = 7 + params.stage * 3;
-      for (let index = 0; index < leaves; index += 1) {
-        const angle = (Math.PI * 2 * index) / leaves + rng() * 0.28;
-        const length = 3 + params.stage + Math.floor(rng() * 3);
-        const x2 = 16 + Math.cos(angle) * length;
-        const y2 = 18 + Math.sin(angle) * Math.max(1.2, length * 0.55) + params.droop;
-        drawPixelLine(pixels, 16, 19, x2, y2, params.outline, 1);
-        drawPixelLine(pixels, 16, 19, x2 - Math.cos(angle), y2, params.leafFill, 1);
-        addPixel(pixels, Math.round((16 + x2) / 2), Math.round((19 + y2) / 2) - 1, params.highlight);
-      }
-      return pixels;
-    }
-
-    for (const symbol of sentence.slice(0, 420)) {
-      if (symbol === 'F') {
-        const rad = turtle.angle * Math.PI / 180;
-        const wind = params.lean * (0.15 + rng() * 0.1);
-        const next = {
-          x: Math.round(turtle.x + Math.cos(rad) * stepLength + wind),
-          y: Math.round(turtle.y + Math.sin(rad) * stepLength + Math.max(0, params.droop) * 0.12),
-        };
-        drawPixelLine(pixels, turtle.x, turtle.y, next.x, next.y, params.outline, turtle.width);
-        if (turtle.width > 1) drawPixelLine(pixels, turtle.x + 1, turtle.y, next.x + 1, next.y, params.stemFill, 1);
-        else addPixel(pixels, next.x, next.y, params.stemFill);
-        turtle.x = next.x; turtle.y = next.y;
-      } else if (symbol === '+') {
-        turtle.angle += config.angle + (rng() - 0.5) * angleJitter;
-      } else if (symbol === '-') {
-        turtle.angle -= config.angle + (rng() - 0.5) * angleJitter;
-      } else if (symbol === '[') {
-        stack.push({ ...turtle, width: Math.max(1, turtle.width - 1) });
-      } else if (symbol === ']') {
-        const leafDirection = turtle.x < 16 ? -1 : 1;
-        if (rng() > 0.25) stampLeaf(pixels, turtle.x, turtle.y, params, leafDirection);
-        turtle = stack.pop() || turtle;
-      } else if (symbol === 'L') {
-        stampLeaf(pixels, turtle.x, turtle.y, params, turtle.x < 16 ? -1 : 1);
-      } else if (symbol === 'B') {
-        if (params.stage >= 3) stampFlower(pixels, turtle.x, turtle.y, state.plantType === 'blossom' ? params.highlight : '#f06ca7', params.outline);
-      } else if (symbol === 'C') {
-        addBlock(pixels, turtle.x - 1, turtle.y - 1, 3, 2, params.outline);
-        addPixel(pixels, turtle.x, turtle.y - 1, params.leafFill);
-        addPixel(pixels, turtle.x + 1, turtle.y - 1, params.highlight);
-      }
-    }
-
-    for (let index = 0; index < state.flowerCount; index += 1) {
-      stampFlower(pixels, 10 + index * 3 + params.lean, 14 - (index % 2), params.highlight, params.outline);
-    }
-    return pixels;
-  }
-
-  function renderPlantSvg(stateInput) {
-    const state = normalizePlantState(stateInput);
-    const preset = PLANT_TYPES[state.plantType];
-    const params = deriveGrowthParameters(state, preset);
-    const pixels = turtlePixelsFromLSystem(state, params);
-    const plantPixels = Array.from(pixels.entries()).map(([key, fill]) => {
-      const [x, y] = key.split(',');
-      return rect(x, y, 1, 1, fill);
-    }).join('');
-    const ariaLabel = escapeAttribute(`${preset.label} pixel L-system plant companion for ${state.location || 'your location'}: ${state.weatherSummary}`);
-    return `<svg viewBox="0 0 32 32" role="img" aria-label="${ariaLabel}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="opacity:${params.opacity}">${plantPixels}${rect(8, 21, 16, 2, params.outline)}${rect(9, 23, 14, 1, params.outline)}${rect(10, 24, 12, 5, params.outline)}${rect(11, 29, 10, 1, params.outline)}${rect(9, 21, 14, 1, '#e0a14a')}${rect(10, 22, 12, 1, '#b86f35')}${rect(11, 24, 10, 4, '#b86f35')}${rect(11, 24, 3, 4, '#e0a14a')}${rect(18, 25, 3, 3, '#6b3f24')}${rect(12, 29, 8, 1, '#6b3f24')}</svg>`;
+  function renderPlantSvgFromExtensionState(extensionState) {
+    const renderer = globalThis.PlantCompanionRenderer;
+    if (!renderer) throw new Error('Plant renderer adapter is not loaded.');
+    const snapshot = toRenderablePlantSnapshot(extensionState);
+    const compatibility = renderer.checkRenderCompatibility(snapshot);
+    if (!compatibility.supported) throw new Error(`Cannot render plant: ${compatibility.reason}`);
+    return renderer.renderPlantSvg(snapshot);
   }
 
   const api = {
@@ -542,7 +342,8 @@
     getRainIntensity,
     advancePlantState,
     refreshPlantStateForWeather,
-    renderPlantSvg,
+    toRenderablePlantSnapshot,
+    renderPlantSvg: renderPlantSvgFromExtensionState,
   };
 
   globalThis.PlantCompanionState = api;
