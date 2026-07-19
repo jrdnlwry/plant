@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 function loadPlantStateApi() {
+  const rendererSource = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/generated/plantRenderer.global.js'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/sharedPlantState.js'), 'utf8');
   const storage = {};
   const context = {
@@ -32,8 +33,9 @@ function loadPlantStateApi() {
   context.globalThis = context;
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(rendererSource, context, { filename: 'plantRenderer.global.js' });
   vm.runInContext(source, context, { filename: 'sharedPlantState.js' });
-  return { api: context.PlantCompanionState, storage };
+  return { api: context.PlantCompanionState, renderer: context.PlantCompanionRenderer, storage };
 }
 
 const baseWeather = Object.freeze({
@@ -188,4 +190,36 @@ test('renders deterministically for identical normalized plant state', () => {
   const state = baseState(api, { growthStage: 4, growthProgress: 42, flowerCount: 2, weatherMood: 'sunny' });
   assert.equal(api.renderPlantSvg(state), api.renderPlantSvg({ ...state }));
   assert.match(api.renderPlantSvg(state), /<svg viewBox="0 0 32 32"/);
+});
+
+test('migrates unversioned state at a non-mutating strict snapshot boundary', () => {
+  const { api, renderer } = loadPlantStateApi();
+  const legacy = baseState(api, { seed: undefined, weather: { temperatureC: 25 } });
+  const before = JSON.stringify(legacy);
+  const snapshot = api.toRenderablePlantSnapshot(legacy);
+  assert.equal(renderer.isPlantStateSnapshot(snapshot), true);
+  assert.equal(snapshot.schemaVersion, renderer.plantStateVersion);
+  assert.equal(snapshot.rendererVersion, renderer.rendererVersion);
+  assert.equal(snapshot.seed, 0, 'seedless legacy appearance retains its historical zero RNG seed');
+  assert.equal(snapshot.weather.humidity, 50);
+  assert.equal(snapshot.weather.fetchedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(JSON.stringify(legacy), before);
+});
+
+test('accepts current snapshots and distinguishes malformed and future-version state', () => {
+  const { api, renderer } = loadPlantStateApi();
+  const current = api.toRenderablePlantSnapshot(baseState(api, { seed: 42 }));
+  assert.equal(renderer.isPlantStateSnapshot(api.toRenderablePlantSnapshot(current)), true);
+  assert.throws(() => api.toRenderablePlantSnapshot({ location: 'Nowhere' }), /Invalid legacy plant state/);
+  assert.throws(() => api.toRenderablePlantSnapshot({ ...current, schemaVersion: 2 }), /Unsupported plant state schema version/);
+  assert.throws(() => api.toRenderablePlantSnapshot({ ...current, rendererVersion: 'future-renderer' }), /Unsupported plant renderer version/);
+});
+
+test('generated global and facade produce identical deterministic package-derived output', () => {
+  const { api, renderer } = loadPlantStateApi();
+  const snapshot = api.toRenderablePlantSnapshot(baseState(api, { seed: 12345, growthStage: 4 }));
+  assert.equal(renderer.checkRenderCompatibility(snapshot).supported, true);
+  assert.equal(api.renderPlantSvg(snapshot), renderer.renderPlantSvg(snapshot));
+  assert.equal(renderer.renderPlantSvg(snapshot), renderer.renderPlantSvg(snapshot));
+  assert.equal(Object.prototype.hasOwnProperty.call(renderer, 'deterministicPlantStateFixture'), false);
 });

@@ -98,3 +98,16 @@ Future environment variables are documented in `apps/web/.env.example`:
 - Server-only placeholders: `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 
 Supabase and Stripe remain selected for later phases, but this phase does not instantiate clients, define database schemas, add API routes, implement authentication, configure payments, publish plants, synchronize extension data, schedule jobs, or simulate garden lifecycle behavior.
+
+## Extension renderer artifact
+
+The unpacked extension commits a classic-script renderer generated from the canonical
+`packages/plant-renderer` source. Regenerate and verify it after changing the renderer
+or its `plant-core` schema dependency:
+
+```sh
+npm run build:extension-renderer
+npm run verify:extension-renderer
+```
+
+Verification is read-only and fails when the committed artifact is missing or stale.

@@ -1,4 +1,4 @@
-importScripts('/src/sharedPlantState.js');
+importScripts('/src/generated/plantRenderer.global.js', '/src/sharedPlantState.js');
 const US_STATE_ABBREVIATIONS = {
   AL: 'Alabama',
   AK: 'Alaska',
@@ -158,7 +158,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 
-const OVERLAY_SCRIPT_FILES = ['src/sharedPlantState.js', 'src/content/injectPlant.js'];
+const OVERLAY_SCRIPT_FILES = ['src/generated/plantRenderer.global.js', 'src/sharedPlantState.js', 'src/content/injectPlant.js'];
 const OVERLAY_CSS_FILES = ['src/content/overlay.css'];
 
 function canInjectIntoTab(tab) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { isPlantStateSnapshot, PLANT_STATE_SCHEMA_VERSION } from '@plant/plant-core';
 import { checkRenderCompatibility, createPlantRenderModel, renderPlantSvg, SUPPORTED_RENDERER_VERSION } from './index.ts';
@@ -21,6 +22,22 @@ test('wrong schema version is an invalid snapshot, distinct from renderer incomp
 });
 test('unsupported renderer version produces clear compatibility failure', () => {
   assert.deepEqual(checkRenderCompatibility({ ...deterministicPlantStateFixture, rendererVersion: 'old-renderer' }), { supported: false, reason: 'unsupported-renderer-version', receivedVersion: 'old-renderer', supportedVersion: SUPPORTED_RENDERER_VERSION });
+});
+
+test('generated classic global matches package compatibility, model, and SVG output', () => {
+  const context = vm.createContext({ globalThis: {} });
+  context.globalThis = context;
+  vm.runInContext(readRepoFile('apps/extension/src/generated/plantRenderer.global.js'), context);
+  const globalRenderer = (context as { PlantCompanionRenderer: {
+    checkRenderCompatibility: typeof checkRenderCompatibility;
+    createPlantRenderModel: typeof createPlantRenderModel;
+    renderPlantSvg: typeof renderPlantSvg;
+  } }).PlantCompanionRenderer;
+  assert.equal(JSON.stringify(globalRenderer.checkRenderCompatibility(deterministicPlantStateFixture)), JSON.stringify(checkRenderCompatibility(deterministicPlantStateFixture)));
+  assert.equal(JSON.stringify(globalRenderer.createPlantRenderModel(deterministicPlantStateFixture)), JSON.stringify(createPlantRenderModel(deterministicPlantStateFixture)));
+  assert.equal(globalRenderer.renderPlantSvg(deterministicPlantStateFixture), renderPlantSvg(deterministicPlantStateFixture));
+  assert.equal(globalRenderer.renderPlantSvg(deterministicPlantStateFixture), globalRenderer.renderPlantSvg(deterministicPlantStateFixture));
+  assert.equal('deterministicPlantStateFixture' in globalRenderer, false);
 });
 function readRepoFile(relativePath: string): string {
   const filePath = fileURLToPath(new URL(`../../../${relativePath}`, import.meta.url));
