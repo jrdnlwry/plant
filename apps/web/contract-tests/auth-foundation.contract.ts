@@ -40,5 +40,6 @@ test('migration protects ownership and derives account identity from auth.uid()'
   assert.match(sql, /enable row level security/g);
   assert.match(sql, /auth\.uid\(\)\) = account_id/g);
   assert.match(sql, /grant update\(first_name, state_code\)/);
+  assert.ok(sql.includes("account_profiles_first_name_characters check (first_name is null or first_name ~ '^[[:alpha:] .''-]+$')"));
   assert.doesNotMatch(sql, /latitude|longitude|garden_plant|extension_link/i);
 });

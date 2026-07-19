@@ -7,6 +7,7 @@ create table public.account_profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint account_profiles_first_name_length check (first_name is null or (char_length(first_name) between 1 and 50)),
+  constraint account_profiles_first_name_characters check (first_name is null or first_name ~ '^[[:alpha:] .''-]+$'),
   constraint account_profiles_state_code check (state_code is null or state_code in ('AZ','CA','CO','FL','GA','IL','MA','MI','NC','NY','OH','OR','PA','TX','VA','WA'))
 );
 
@@ -20,6 +21,7 @@ create table public.public_contributors (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint public_contributors_first_name_length check (display_first_name is null or (char_length(display_first_name) between 1 and 50)),
+  constraint public_contributors_first_name_characters check (display_first_name is null or display_first_name ~ '^[[:alpha:] .''-]+$'),
   constraint public_contributors_state_code check (state_code is null or state_code in ('AZ','CA','CO','FL','GA','IL','MA','MI','NC','NY','OH','OR','PA','TX','VA','WA')),
   constraint public_contributors_visibility check (visibility_status in ('private','public','hidden')),
   constraint public_contributors_public_id_format check (public_id ~ '^pc_[0-9a-f]{36}$')
