@@ -98,12 +98,13 @@ test('normalizes plant state defaults, types, trimming, and clamps numeric field
   assert.match(normalized.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test('uses stable deterministic seed derivation and preserves explicit seed after creation', () => {
+test('preserves the legacy zero seed and explicit seeds after creation', () => {
   const { api } = loadPlantStateApi();
   const input = { plantType: 'vine', location: ' Asheville, NC ', createdAt: '2026-02-03T04:05:06.000Z' };
   const first = api.normalizePlantState(input);
   const second = api.normalizePlantState(input);
-  assert.equal(first.seed, second.seed);
+  assert.equal(first.seed, 0);
+  assert.equal(second.seed, 0);
   assert.equal(api.normalizePlantState({ ...input, seed: 987654321 }).seed, 987654321);
 
   const created = api.createInitialPlantState({ plantType: 'sapling', location: ' Boone, NC ' });
@@ -123,9 +124,10 @@ test('normalizes older or incomplete saved state safely', async () => {
   assert.equal(state.hydration, 70);
   assert.equal(state.growthStage, 1);
   assert.equal(state.weather, null);
-  assert.equal(Number.isInteger(state.seed), true, 'legacy state receives a persisted visual seed');
+  assert.equal(state.seed, 0, 'legacy state persists the historical zero visual seed');
   assert.equal(typeof state.plantId, 'string', 'legacy state receives a local lifecycle identity');
   assert.equal(storage.ambientPlantState.plantId, state.plantId);
+  assert.equal(storage.ambientPlantState.seed, 0);
 });
 
 test('preserves current plant-type and weather-state behavior', () => {

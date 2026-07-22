@@ -125,7 +125,7 @@
     const location = typeof state.location === 'string' ? state.location.trim() : '';
     const seed = Number.isFinite(Number(state.seed))
       ? Number(state.seed) >>> 0
-      : hashString(`${plantType}|${location}|${createdAt}`);
+      : 0;
 
     return {
       ...DEFAULT_PLANT_STATE,
