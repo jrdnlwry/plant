@@ -27,6 +27,7 @@
     createdAt: null,
     updatedAt: null,
     weatherUpdatedAt: null,
+    revision: 0,
   };
 
   const PLANT_TYPES = {
@@ -133,6 +134,7 @@
       plantType,
       plantId,
       seed,
+      revision: Math.max(0, Math.floor(Number(state.revision) || 0)),
       location,
       growthStage: clamp(state.growthStage ?? DEFAULT_PLANT_STATE.growthStage, 1, 4),
       health: clamp(state.health ?? DEFAULT_PLANT_STATE.health, 0, 100),
@@ -153,7 +155,7 @@
       const state = result[STORAGE_KEY];
       if (!state) return null;
       const normalized = normalizePlantState(state);
-      if (!state.plantId || !Number.isFinite(Number(state.seed))) {
+      if (!state.plantId || !Number.isFinite(Number(state.seed)) || !Number.isFinite(Number(state.revision))) {
         return chrome.storage.local.set({ [STORAGE_KEY]: normalized }).then(() => normalized);
       }
       return normalized;
@@ -177,11 +179,19 @@
       : [];
   }
 
-  async function savePlantState(nextState) {
-    const state = normalizePlantState({ ...nextState, updatedAt: new Date().toISOString() });
+  async function savePlantState(nextState, options = {}) {
+    const candidate = normalizePlantState(nextState);
     const storedState = await getStoredPlantState();
-    if (storedState && storedState.plantId !== state.plantId) return storedState;
+    if (storedState && storedState.plantId !== candidate.plantId) return storedState;
 
+    const expectedRevision = options.expectedRevision ?? candidate.revision;
+    if (storedState && storedState.revision !== expectedRevision) return storedState;
+
+    const state = normalizePlantState({
+      ...candidate,
+      revision: (storedState?.revision ?? expectedRevision) + 1,
+      updatedAt: options.updatedAt || candidate.updatedAt || new Date().toISOString(),
+    });
     if (!isPlantLifecycleComplete(state)) {
       await chrome.storage.local.set({ [STORAGE_KEY]: state });
       return state;
@@ -209,6 +219,7 @@
       plantType,
       location,
       seed: createVisualSeed(plantId),
+      revision: 0,
       growthStage: 1,
       health: 85,
       hydration: 70,

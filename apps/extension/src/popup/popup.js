@@ -131,6 +131,12 @@ async function renderCompletionDecision(state) {
   return shouldDecide;
 }
 
+async function requestLifecycleMutation(message) {
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response?.ok) throw new Error(response?.error || 'Lifecycle update failed.');
+  return response;
+}
+
 async function syncPlantState(options = {}) {
   const storedState = await window.PlantCompanionState.getStoredPlantState();
   if (!storedState) {
@@ -141,22 +147,20 @@ async function syncPlantState(options = {}) {
   }
 
   setStatus('Checking local weather…');
-  let weatherError = null;
-  const state = await window.PlantCompanionState.refreshPlantStateForWeather(options).catch((error) => {
-    weatherError = error;
-    return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(storedState));
+  const response = await requestLifecycleMutation({
+    type: 'PLANT_REQUEST_LIFECYCLE_UPDATE',
+    force: Boolean(options.force),
   });
+  const state = response.state || await window.PlantCompanionState.getStoredPlantState();
   renderSetup(state);
   const awaitingDecision = await renderCompletionDecision(state);
   await renderStoredPlantOnActiveTab();
   if (awaitingDecision) {
     setStatus('Choose what happens to your completed plant.');
-    return state;
-  }
-  if (state.weather) {
+  } else if (response.weatherError) {
+    setStatus(`Weather unavailable: ${response.weatherError}. Using elapsed time until weather is available.`, { kind: 'weather' });
+  } else if (state.weather) {
     setStatus(`Updated from ${state.weather.placeName} weather. Rain: ${formatRainDetails(state.weather)}.`, { kind: 'weather' });
-  } else if (weatherError) {
-    setStatus(`Weather unavailable: ${weatherError.message}. Using elapsed time until weather is available.`, { kind: 'weather' });
   } else {
     setStatus('Using elapsed time until weather is available.', { kind: 'weather' });
   }
@@ -179,23 +183,18 @@ async function syncToggleFromCurrentTab() {
 
 setupForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const state = window.PlantCompanionState.createInitialPlantState({
+  const response = await requestLifecycleMutation({
+    type: 'PLANT_INITIALIZE',
     plantType: plantTypeInput.value,
     location: locationInput.value,
   });
-
-  const savedState = await window.PlantCompanionState.savePlantState(state);
-  let weatherError = null;
-  const refreshedState = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
-    weatherError = error;
-    return savedState;
-  });
+  const refreshedState = response.state;
   renderSetup(refreshedState);
   await renderStoredPlantOnActiveTab();
   if (refreshedState.weather) {
     setStatus('Plant setup saved with local weather.');
-  } else if (weatherError) {
-    setStatus(`Plant setup saved. Weather unavailable: ${weatherError.message}`);
+  } else if (response.weatherError) {
+    setStatus(`Plant setup saved. Weather unavailable: ${response.weatherError}`);
   } else {
     setStatus('Plant setup saved. Weather will retry later.');
   }
@@ -226,7 +225,8 @@ async function resolveCompletion(decision) {
   addToGarden.disabled = true;
   keepPrivate.disabled = true;
   try {
-    const result = await window.PlantCompanionState.completePlantLifecycle(decision);
+    const response = await requestLifecycleMutation({ type: 'PLANT_COMPLETE_LIFECYCLE', decision });
+    const result = response.completion;
     if (!result) throw new Error('This plant lifecycle was already restarted.');
     completionPanel.hidden = true;
     renderSetup(result.nextPlant);

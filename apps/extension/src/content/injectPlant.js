@@ -105,10 +105,9 @@
   async function renderStoredPlant(root, options = {}) {
     let state = await window.PlantCompanionState.getStoredPlantState();
     if (state && !options.renderOnly) {
-      state = await window.PlantCompanionState.refreshPlantStateForWeather().catch((error) => {
-        console.warn('Plant weather refresh failed:', error);
-        return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(state));
-      });
+      const response = await chrome.runtime.sendMessage({ type: 'PLANT_REQUEST_LIFECYCLE_UPDATE' });
+      if (!response?.ok) console.warn('Plant lifecycle refresh failed:', response?.error);
+      state = response?.state || await window.PlantCompanionState.getStoredPlantState();
     }
     renderPlant(root, state);
   }
