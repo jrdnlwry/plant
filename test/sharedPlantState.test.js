@@ -217,6 +217,20 @@ test('archives a completed snapshot and restarts with fresh canonical identity',
   assert.equal(await api.completePlantLifecycle('community-garden'), null, 'the decision boundary is one-time');
 });
 
+test('rejects stale saves after a completed lifecycle restarts', async () => {
+  const { api, storage } = loadPlantStateApi();
+  const completed = baseState(api, { growthStage: 4, growthProgress: 100 });
+  await api.savePlantState(completed);
+  const { nextPlant } = await api.completePlantLifecycle('private');
+
+  const staleResult = await api.savePlantState({ ...completed, weatherMood: 'rainy' });
+
+  assert.equal(staleResult.plantId, nextPlant.plantId, 'save returns the current lifecycle');
+  assert.equal(storage.ambientPlantState.plantId, nextPlant.plantId, 'stale lifecycle does not replace the new plant');
+  assert.equal(storage.ambientPlantPendingCompletion, null, 'stale lifecycle does not recreate completion');
+  assert.equal(storage.ambientPlantArchive.length, 1, 'completed lifecycle remains archived only once');
+});
+
 test('private archives are append-only from callers and reject invalid decisions', async () => {
   const { api } = loadPlantStateApi();
   await assert.rejects(() => api.completePlantLifecycle('publish-now'), /Invalid lifecycle completion decision/);

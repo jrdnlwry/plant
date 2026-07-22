@@ -177,24 +177,28 @@
       : [];
   }
 
-  function savePlantState(nextState) {
+  async function savePlantState(nextState) {
     const state = normalizePlantState({ ...nextState, updatedAt: new Date().toISOString() });
+    const storedState = await getStoredPlantState();
+    if (storedState && storedState.plantId !== state.plantId) return storedState;
+
     if (!isPlantLifecycleComplete(state)) {
-      return chrome.storage.local.set({ [STORAGE_KEY]: state }).then(() => state);
+      await chrome.storage.local.set({ [STORAGE_KEY]: state });
+      return state;
     }
-    return getPendingLifecycleCompletion().then((pending) => {
-      const completion = pending?.plantId === state.plantId
-        ? pending
-        : {
-            plantId: state.plantId,
-            completedAt: state.updatedAt,
-            snapshot: toRenderablePlantSnapshot(state),
-          };
-      return chrome.storage.local.set({
-        [STORAGE_KEY]: state,
-        [COMPLETION_STORAGE_KEY]: completion,
-      }).then(() => state);
+    const pending = await getPendingLifecycleCompletion();
+    const completion = pending?.plantId === state.plantId
+      ? pending
+      : {
+          plantId: state.plantId,
+          completedAt: state.updatedAt,
+          snapshot: toRenderablePlantSnapshot(state),
+        };
+    await chrome.storage.local.set({
+      [STORAGE_KEY]: state,
+      [COMPLETION_STORAGE_KEY]: completion,
     });
+    return state;
   }
 
   function createInitialPlantState({ plantType, location }) {
