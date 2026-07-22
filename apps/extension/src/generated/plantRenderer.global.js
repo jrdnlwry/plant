@@ -269,7 +269,7 @@ function drawPixelLine(pixels, x1, y1, x2, y2, fill, thickness = 1) {
 function deriveGrowthParameters(state) { const preset = plant_core_1.plantTypeDefinitions[state.plantType]; const stage = Math.round(state.growthStage); const healthRatio = state.health / 100; const hydrationRatio = state.hydration / 100; const windSpeed = state.weather?.windSpeed ?? 0; return { stage, lean: windSpeed >= 25 ? (windSpeed >= 40 ? 2 : 1) : 0, droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0), stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem, leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf, highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight, outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24', opacity: (0.55 + healthRatio * 0.45).toFixed(2), stepScale: 0.75 + stage * 0.18, iterations: Math.max(1, Math.min((L_SYSTEM_PRESETS[state.plantType]?.iterations || 2), stage === 1 ? 1 : stage === 2 ? 2 : 3)) }; }
 function generateLSystem(state, params) {
     const config = L_SYSTEM_PRESETS[state.plantType] || L_SYSTEM_PRESETS.fern;
-    const rng = createRng(state.seed + params.stage * 1009 + Math.round(state.growthProgress) * 17);
+    const rng = createRng(state.seed + params.stage * 1009);
     let sentence = config.axiom;
     for (let i = 0; i < params.iterations; i++) {
         sentence = sentence.split('').map((symbol) => { const rules = config.rules[symbol]; return rules ? weightedPick(rng, rules) : symbol; }).join('');

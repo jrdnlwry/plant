@@ -147,16 +147,6 @@ async function fetchRemoteWeatherForLocation(location) {
   };
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== 'PLANT_FETCH_WEATHER') return false;
-
-  fetchRemoteWeatherForLocation(message.location)
-    .then((weather) => sendResponse({ ok: true, weather }))
-    .catch((error) => sendResponse({ ok: false, error: error.message || 'Unable to fetch weather.' }));
-
-  return true;
-});
-
 
 const OVERLAY_SCRIPT_FILES = ['src/generated/plantRenderer.global.js', 'src/sharedPlantState.js', 'src/content/injectPlant.js'];
 const OVERLAY_CSS_FILES = ['src/content/overlay.css'];
@@ -193,12 +183,94 @@ async function injectPlantOverlayIntoOpenTabs() {
 const WEATHER_ALARM_NAME = 'ambient-plant-weather-refresh';
 const WEATHER_ALARM_MINUTES = 30;
 
+let lifecycleQueue = Promise.resolve();
+const inFlightLifecycleRequests = new Map();
+
+function enqueueLifecycleMutation(key, operation) {
+  if (key && inFlightLifecycleRequests.has(key)) return inFlightLifecycleRequests.get(key);
+  const queued = lifecycleQueue.catch(() => undefined).then(operation);
+  lifecycleQueue = queued.catch(() => undefined);
+  if (key) {
+    inFlightLifecycleRequests.set(key, queued);
+    queued.then(
+      () => inFlightLifecycleRequests.delete(key),
+      () => inFlightLifecycleRequests.delete(key),
+    );
+  }
+  return queued;
+}
+
+async function refreshStoredPlant(options = {}) {
+  let state = await globalThis.PlantCompanionState.getStoredPlantState();
+  if (!state) return { state: null, updated: false };
+
+  const now = Date.now();
+  const needsWeather = Boolean(options.force) || globalThis.PlantCompanionState.shouldRefreshWeather(state, now);
+  const needsElapsedUpdate = now - Date.parse(state.updatedAt || state.createdAt) > 30 * 60 * 1000;
+  if (!needsWeather && !needsElapsedUpdate) return { state, updated: false };
+
+  let weather = state.weather;
+  let weatherError = null;
+  if (needsWeather) {
+    try {
+      weather = await fetchRemoteWeatherForLocation(state.location);
+    } catch (error) {
+      weatherError = error.message || 'Unable to fetch weather.';
+    }
+  }
+
+  // A weather request can outlive its original read. Re-read before computing and
+  // require the revision at save time, so a restarted worker cannot commit stale data.
+  state = await globalThis.PlantCompanionState.getStoredPlantState();
+  if (!state) return { state: null, updated: false, weatherError };
+  const nextState = globalThis.PlantCompanionState.advancePlantState(state, weather, now);
+  if (nextState === state || (nextState.updatedAt === state.updatedAt && nextState.weather === state.weather)) {
+    return { state, updated: false, weatherError };
+  }
+  const saved = await globalThis.PlantCompanionState.savePlantState(nextState, { expectedRevision: state.revision });
+  return { state: saved, updated: saved.revision !== state.revision, weatherError };
+}
+
+async function initializePlant({ plantType, location }) {
+  const state = globalThis.PlantCompanionState.createInitialPlantState({ plantType, location });
+  await chrome.storage.local.set({ ambientPlantState: state, ambientPlantPendingCompletion: null });
+  return refreshStoredPlant({ force: true });
+}
+
+function handleLifecycleMessage(message) {
+  if (message.type === 'PLANT_REQUEST_LIFECYCLE_UPDATE') {
+    const key = message.force ? 'refresh:force' : 'refresh:normal';
+    return enqueueLifecycleMutation(key, () => refreshStoredPlant({ force: Boolean(message.force) }));
+  }
+  if (message.type === 'PLANT_INITIALIZE') {
+    return enqueueLifecycleMutation(null, () => initializePlant(message));
+  }
+  if (message.type === 'PLANT_COMPLETE_LIFECYCLE') {
+    return enqueueLifecycleMutation(null, async () => ({
+      completion: await globalThis.PlantCompanionState.completePlantLifecycle(message.decision),
+    }));
+  }
+  return null;
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'PLANT_FETCH_WEATHER') {
+    fetchRemoteWeatherForLocation(message.location)
+      .then((weather) => sendResponse({ ok: true, weather }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || 'Unable to fetch weather.' }));
+    return true;
+  }
+
+  const operation = message && handleLifecycleMessage(message);
+  if (!operation) return false;
+  operation
+    .then((result) => sendResponse({ ok: true, ...result }))
+    .catch((error) => sendResponse({ ok: false, error: error.message || 'Lifecycle update failed.' }));
+  return true;
+});
+
 async function refreshStoredPlantFromAlarm() {
-  const state = await globalThis.PlantCompanionState.getStoredPlantState();
-  if (!state?.location) return null;
-  const weather = await fetchRemoteWeatherForLocation(state.location);
-  const nextState = globalThis.PlantCompanionState.advancePlantState(state, weather);
-  return globalThis.PlantCompanionState.savePlantState(nextState);
+  return enqueueLifecycleMutation('refresh:normal', () => refreshStoredPlant());
 }
 
 function ensureWeatherAlarm() {

@@ -282,3 +282,57 @@ test('generated global and facade produce identical deterministic package-derive
   assert.equal(renderer.renderPlantSvg(snapshot), renderer.renderPlantSvg(snapshot));
   assert.equal(Object.prototype.hasOwnProperty.call(renderer, 'deterministicPlantStateFixture'), false);
 });
+
+test('migrates legacy revision and rejects stale same-plant whole-record saves', async () => {
+  const { api, storage } = loadPlantStateApi();
+  storage.ambientPlantState = {
+    plantType: 'blossom',
+    location: 'Raleigh, NC',
+    seed: 7,
+    growthStage: 2,
+    growthProgress: 20,
+  };
+
+  const legacy = await api.getStoredPlantState();
+  assert.equal(legacy.revision, 0);
+  assert.equal(storage.ambientPlantState.revision, 0, 'migration is persisted');
+
+  const first = await api.savePlantState({ ...legacy, growthProgress: 30 }, { expectedRevision: 0 });
+  assert.equal(first.revision, 1);
+  assert.equal(first.growthProgress, 30);
+
+  const stale = await api.savePlantState({ ...legacy, growthProgress: 25, health: 1 }, { expectedRevision: 0 });
+  assert.equal(stale.revision, 1);
+  assert.equal(stale.growthProgress, 30);
+  assert.notEqual(stale.health, 1);
+  assert.equal(storage.ambientPlantState.revision, 1);
+});
+
+test('growth progress does not reroll topology within a lifecycle stage', () => {
+  const { api, renderer } = loadPlantStateApi();
+  const early = api.toRenderablePlantSnapshot(baseState(api, {
+    growthStage: 3,
+    growthProgress: 1,
+    health: 85,
+    hydration: 70,
+    flowerCount: 0,
+  }));
+  const later = { ...early, growthProgress: 99 };
+  assert.deepEqual(renderer.createPlantRenderModel(early).pixels, renderer.createPlantRenderModel(later).pixels);
+});
+
+test('popup and overlay delegate active lifecycle mutations to the service worker', () => {
+  const popup = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/popup/popup.js'), 'utf8');
+  const overlay = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/content/injectPlant.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/background/weatherService.js'), 'utf8');
+
+  for (const clientSource of [popup, overlay]) {
+    assert.doesNotMatch(clientSource, /\.advancePlantState\s*\(/);
+    assert.doesNotMatch(clientSource, /\.savePlantState\s*\(/);
+    assert.doesNotMatch(clientSource, /\.refreshPlantStateForWeather\s*\(/);
+  }
+  assert.match(popup, /PLANT_REQUEST_LIFECYCLE_UPDATE/);
+  assert.match(overlay, /PLANT_REQUEST_LIFECYCLE_UPDATE/);
+  assert.match(worker, /enqueueLifecycleMutation/);
+  assert.match(worker, /expectedRevision: state\.revision/);
+});
