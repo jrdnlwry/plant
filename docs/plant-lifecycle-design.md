@@ -2,6 +2,28 @@
 
 This guide defines believable visual milestone ordering for each plant category. The core rule is that the renderer should ask: **given this plant type and current maturity, what is the next believable thing it could grow?** Weather can accelerate, slow, stress, or polish that milestone, but it should not skip structure.
 
+## Extension completion and restart boundary
+
+The canonical extension lifecycle is complete when the normalized plant has
+`growthStage === 4` and `growthProgress >= 100`. Stage 4 by itself is mature but
+not complete: progress continues through that final stage. Flowers are an
+independent weather-driven flourish and are deliberately excluded because a
+fern never flowers and other species flourish probabilistically.
+
+On completion, `ambientPlantPendingCompletion` records the completed local
+plant identity so the popup presents exactly one decision. Either decision
+appends the completed normalized snapshot to the private
+`ambientPlantArchive`; `community-garden` is only a local future-publication
+intent in this phase. The active `ambientPlantState` is then replaced with a
+stage-one plant using the same type and location but a new `plantId`, visual
+seed, and timestamps. The archive contains plant snapshots, never rendered SVG
+or pixel output.
+
+Existing unversioned extension storage remains readable. Missing `plantId` and
+`seed` fields are assigned and written back lazily, while archive and pending
+completion keys default to empty. The canonical renderer and its versioned
+snapshot adapter remain unchanged.
+
 ## Universal sequencing rules
 
 Use the seven-stage model as a design vocabulary even if the saved state uses fewer numeric stages today.

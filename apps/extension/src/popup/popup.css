@@ -89,6 +89,15 @@ button {
   background: #e0a14a;
 }
 
+.completion-panel {
+  border-color: #2f7d32;
+  background: #f2f8df;
+}
+
+.completion-panel button + button {
+  margin-top: 8px;
+}
+
 .plant-preview {
   width: 112px;
   height: 112px;
