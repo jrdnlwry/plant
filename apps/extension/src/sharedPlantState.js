@@ -1,5 +1,7 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantState';
+  const ARCHIVE_STORAGE_KEY = 'ambientPlantArchive';
+  const COMPLETION_STORAGE_KEY = 'ambientPlantPendingCompletion';
   const RENDERER_VERSION = 'l-system-pixel-v2';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
@@ -97,10 +99,29 @@
     return options[Math.floor(rng() * options.length)];
   }
 
+  function createPlantId() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `plant-${Date.now().toString(36)}-${Math.floor(Math.random() * 0x100000000).toString(36)}`;
+  }
+
+  function createVisualSeed(plantId) {
+    if (globalThis.crypto?.getRandomValues) {
+      const values = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(values);
+      return values[0];
+    }
+    return hashString(`${plantId}|${Date.now()}|${Math.random()}`);
+  }
+
+  function cloneStoredValue(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
   function normalizePlantState(state = {}) {
     const now = new Date().toISOString();
     const plantType = PLANT_TYPES[state.plantType] ? state.plantType : DEFAULT_PLANT_STATE.plantType;
     const createdAt = state.createdAt || now;
+    const plantId = typeof state.plantId === 'string' && state.plantId ? state.plantId : createPlantId();
     const location = typeof state.location === 'string' ? state.location.trim() : '';
     const seed = Number.isFinite(Number(state.seed))
       ? Number(state.seed) >>> 0
@@ -110,6 +131,8 @@
       ...DEFAULT_PLANT_STATE,
       ...state,
       plantType,
+      plantId,
+      seed,
       location,
       growthStage: clamp(state.growthStage ?? DEFAULT_PLANT_STATE.growthStage, 1, 4),
       health: clamp(state.health ?? DEFAULT_PLANT_STATE.health, 0, 100),
@@ -128,20 +151,60 @@
   function getStoredPlantState() {
     return chrome.storage.local.get(STORAGE_KEY).then((result) => {
       const state = result[STORAGE_KEY];
-      return state ? normalizePlantState(state) : null;
+      if (!state) return null;
+      const normalized = normalizePlantState(state);
+      if (!state.plantId || !Number.isFinite(Number(state.seed))) {
+        return chrome.storage.local.set({ [STORAGE_KEY]: normalized }).then(() => normalized);
+      }
+      return normalized;
     });
+  }
+
+  function isPlantLifecycleComplete(plant) {
+    const state = normalizePlantState(plant);
+    return state.growthStage === 4 && state.growthProgress >= 100;
+  }
+
+  async function getPendingLifecycleCompletion() {
+    const result = await chrome.storage.local.get(COMPLETION_STORAGE_KEY);
+    return result[COMPLETION_STORAGE_KEY] || null;
+  }
+
+  async function getPlantArchive() {
+    const result = await chrome.storage.local.get(ARCHIVE_STORAGE_KEY);
+    return Array.isArray(result[ARCHIVE_STORAGE_KEY])
+      ? cloneStoredValue(result[ARCHIVE_STORAGE_KEY])
+      : [];
   }
 
   function savePlantState(nextState) {
     const state = normalizePlantState({ ...nextState, updatedAt: new Date().toISOString() });
-    return chrome.storage.local.set({ [STORAGE_KEY]: state }).then(() => state);
+    if (!isPlantLifecycleComplete(state)) {
+      return chrome.storage.local.set({ [STORAGE_KEY]: state }).then(() => state);
+    }
+    return getPendingLifecycleCompletion().then((pending) => {
+      const completion = pending?.plantId === state.plantId
+        ? pending
+        : {
+            plantId: state.plantId,
+            completedAt: state.updatedAt,
+            snapshot: toRenderablePlantSnapshot(state),
+          };
+      return chrome.storage.local.set({
+        [STORAGE_KEY]: state,
+        [COMPLETION_STORAGE_KEY]: completion,
+      }).then(() => state);
+    });
   }
 
   function createInitialPlantState({ plantType, location }) {
     const now = new Date().toISOString();
+    const plantId = createPlantId();
     return normalizePlantState({
+      plantId,
       plantType,
       location,
+      seed: createVisualSeed(plantId),
       growthStage: 1,
       health: 85,
       hydration: 70,
@@ -152,6 +215,34 @@
       createdAt: now,
       updatedAt: now,
     });
+  }
+
+  async function completePlantLifecycle(decision) {
+    if (decision !== 'community-garden' && decision !== 'private') {
+      throw new TypeError('Invalid lifecycle completion decision.');
+    }
+    const [plant, pending, archive] = await Promise.all([
+      getStoredPlantState(),
+      getPendingLifecycleCompletion(),
+      getPlantArchive(),
+    ]);
+    if (!plant || !pending || pending.plantId !== plant.plantId || !isPlantLifecycleComplete(plant)) return null;
+
+    const archivedAt = new Date().toISOString();
+    const archivedPlant = {
+      plantId: plant.plantId,
+      completedAt: pending.completedAt,
+      archivedAt,
+      decision,
+      snapshot: pending.snapshot || toRenderablePlantSnapshot(plant),
+    };
+    const nextPlant = createInitialPlantState({ plantType: plant.plantType, location: plant.location });
+    await chrome.storage.local.set({
+      [STORAGE_KEY]: nextPlant,
+      [ARCHIVE_STORAGE_KEY]: [...archive, archivedPlant],
+      [COMPLETION_STORAGE_KEY]: null,
+    });
+    return { archivedPlant: cloneStoredValue(archivedPlant), nextPlant };
   }
 
   function shouldRefreshWeather(state, now = Date.now()) {
@@ -198,6 +289,7 @@
 
   function advancePlantState(stateInput, weather = stateInput.weather, now = Date.now()) {
     const state = normalizePlantState(stateInput);
+    if (isPlantLifecycleComplete(state)) return state;
     const elapsedDays = clamp((now - Date.parse(state.updatedAt || state.createdAt)) / DAY_MS, 0, 7);
     if (elapsedDays <= 0 && weather === state.weather) return state;
 
@@ -332,6 +424,10 @@
     DEFAULT_PLANT_STATE,
     PLANT_TYPES,
     FLOWER_MIN_STAGE_BY_TYPE,
+    isPlantLifecycleComplete,
+    getPendingLifecycleCompletion,
+    getPlantArchive,
+    completePlantLifecycle,
     getStoredPlantState,
     savePlantState,
     createInitialPlantState,

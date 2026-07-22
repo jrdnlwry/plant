@@ -20,7 +20,10 @@ function loadPlantStateApi() {
     chrome: {
       storage: {
         local: {
-          get: async (key) => ({ [key]: storage[key] }),
+          get: async (key) => {
+            if (Array.isArray(key)) return Object.fromEntries(key.map((entry) => [entry, storage[entry]]));
+            return { [key]: storage[key] };
+          },
           set: async (value) => Object.assign(storage, value),
         },
       },
@@ -104,7 +107,8 @@ test('uses stable deterministic seed derivation and preserves explicit seed afte
   assert.equal(api.normalizePlantState({ ...input, seed: 987654321 }).seed, 987654321);
 
   const created = api.createInitialPlantState({ plantType: 'sapling', location: ' Boone, NC ' });
-  assert.equal(created.seed, undefined, 'current creation path does not persist the computed fallback seed');
+  assert.equal(Number.isInteger(created.seed), true, 'new lifecycles persist their visual seed');
+  assert.equal(typeof created.plantId, 'string');
   const savedAgain = api.normalizePlantState({ ...created, seed: first.seed, location: 'Changed, NC' });
   assert.equal(savedAgain.seed, first.seed);
 });
@@ -119,7 +123,9 @@ test('normalizes older or incomplete saved state safely', async () => {
   assert.equal(state.hydration, 70);
   assert.equal(state.growthStage, 1);
   assert.equal(state.weather, null);
-  assert.equal(state.seed, undefined, 'current normalizer computes but does not attach a derived seed for older seedless state');
+  assert.equal(Number.isInteger(state.seed), true, 'legacy state receives a persisted visual seed');
+  assert.equal(typeof state.plantId, 'string', 'legacy state receives a local lifecycle identity');
+  assert.equal(storage.ambientPlantState.plantId, state.plantId);
 });
 
 test('preserves current plant-type and weather-state behavior', () => {
@@ -185,6 +191,42 @@ test('flower generation remains restricted by type, stage, health, mood, and wea
   assert.equal(api.advancePlantState(lowHealth, sunny, now).flowerCount, 1);
 });
 
+test('uses terminal stage progress as the single lifecycle completion condition', () => {
+  const { api } = loadPlantStateApi();
+  assert.equal(api.isPlantLifecycleComplete(baseState(api, { growthStage: 3, growthProgress: 100, flowerCount: 5 })), false);
+  assert.equal(api.isPlantLifecycleComplete(baseState(api, { growthStage: 4, growthProgress: 99.99, flowerCount: 5 })), false);
+  assert.equal(api.isPlantLifecycleComplete(baseState(api, { plantType: 'fern', growthStage: 4, growthProgress: 100, flowerCount: 0 })), true);
+});
+
+test('archives a completed snapshot and restarts with fresh canonical identity', async () => {
+  const { api, storage } = loadPlantStateApi();
+  const completed = baseState(api, { growthStage: 4, growthProgress: 100, seed: 88 });
+  await api.savePlantState(completed);
+
+  const pending = await api.getPendingLifecycleCompletion();
+  assert.equal(pending.plantId, completed.plantId);
+  const result = await api.completePlantLifecycle('community-garden');
+  assert.equal(result.archivedPlant.decision, 'community-garden');
+  assert.equal(result.archivedPlant.plantId, completed.plantId);
+  assert.equal(result.archivedPlant.snapshot.seed, 88);
+  assert.equal(result.nextPlant.plantId === completed.plantId, false);
+  assert.equal(result.nextPlant.seed === completed.seed, false);
+  assert.equal(result.nextPlant.growthStage, 1);
+  assert.equal(result.nextPlant.growthProgress, 0);
+  assert.equal(storage.ambientPlantPendingCompletion, null);
+  assert.equal(await api.completePlantLifecycle('community-garden'), null, 'the decision boundary is one-time');
+});
+
+test('private archives are append-only from callers and reject invalid decisions', async () => {
+  const { api } = loadPlantStateApi();
+  await assert.rejects(() => api.completePlantLifecycle('publish-now'), /Invalid lifecycle completion decision/);
+  await api.savePlantState(baseState(api, { growthStage: 4, growthProgress: 100 }));
+  await api.completePlantLifecycle('private');
+  const archive = await api.getPlantArchive();
+  archive[0].snapshot.location = 'Mutated, NC';
+  assert.equal((await api.getPlantArchive())[0].snapshot.location, 'Raleigh, NC');
+});
+
 test('renders deterministically for identical normalized plant state', () => {
   const { api } = loadPlantStateApi();
   const state = baseState(api, { growthStage: 4, growthProgress: 42, flowerCount: 2, weatherMood: 'sunny' });
@@ -194,7 +236,8 @@ test('renders deterministically for identical normalized plant state', () => {
 
 test('migrates unversioned state at a non-mutating strict snapshot boundary', () => {
   const { api, renderer } = loadPlantStateApi();
-  const legacy = baseState(api, { seed: undefined, weather: { temperatureC: 25 } });
+  const legacy = baseState(api, { weather: { temperatureC: 25 } });
+  delete legacy.seed;
   const before = JSON.stringify(legacy);
   const snapshot = api.toRenderablePlantSnapshot(legacy);
   assert.equal(renderer.isPlantStateSnapshot(snapshot), true);

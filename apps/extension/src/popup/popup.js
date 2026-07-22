@@ -8,6 +8,10 @@ const locationInput = document.getElementById('location');
 const plantPreview = document.getElementById('plant-preview');
 const resetSetup = document.getElementById('reset-setup');
 const refreshWeather = document.getElementById('refresh-weather');
+const completionPanel = document.getElementById('completion-panel');
+const completionPreview = document.getElementById('completion-preview');
+const addToGarden = document.getElementById('add-to-garden');
+const keepPrivate = document.getElementById('keep-private');
 let weatherStatusMessage = '';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -117,6 +121,16 @@ function renderSetup(state) {
   document.getElementById('fact-flowers').textContent = String(Math.round(state.flowerCount));
 }
 
+async function renderCompletionDecision(state) {
+  const pending = await window.PlantCompanionState.getPendingLifecycleCompletion();
+  const shouldDecide = Boolean(state && pending?.plantId === state.plantId
+    && window.PlantCompanionState.isPlantLifecycleComplete(state));
+  completionPanel.hidden = !shouldDecide;
+  plantPanel.hidden = shouldDecide || !state;
+  if (shouldDecide) completionPreview.innerHTML = window.PlantCompanionState.renderPlantSvg(state);
+  return shouldDecide;
+}
+
 async function syncPlantState(options = {}) {
   const storedState = await window.PlantCompanionState.getStoredPlantState();
   if (!storedState) {
@@ -133,7 +147,12 @@ async function syncPlantState(options = {}) {
     return window.PlantCompanionState.savePlantState(window.PlantCompanionState.advancePlantState(storedState));
   });
   renderSetup(state);
+  const awaitingDecision = await renderCompletionDecision(state);
   await renderStoredPlantOnActiveTab();
+  if (awaitingDecision) {
+    setStatus('Choose what happens to your completed plant.');
+    return state;
+  }
   if (state.weather) {
     setStatus(`Updated from ${state.weather.placeName} weather. Rain: ${formatRainDetails(state.weather)}.`, { kind: 'weather' });
   } else if (weatherError) {
@@ -202,6 +221,29 @@ resetSetup.addEventListener('click', async () => {
   plantPanel.hidden = true;
   setStatus('Update your setup and save again.');
 });
+
+async function resolveCompletion(decision) {
+  addToGarden.disabled = true;
+  keepPrivate.disabled = true;
+  try {
+    const result = await window.PlantCompanionState.completePlantLifecycle(decision);
+    if (!result) throw new Error('This plant lifecycle was already restarted.');
+    completionPanel.hidden = true;
+    renderSetup(result.nextPlant);
+    await renderStoredPlantOnActiveTab();
+    setStatus(decision === 'community-garden'
+      ? 'Plant archived privately and garden intent saved. A new plant has started.'
+      : 'Plant archived privately. A new plant has started.');
+  } catch (error) {
+    setStatus(error.message || 'Could not restart the plant lifecycle.');
+  } finally {
+    addToGarden.disabled = false;
+    keepPrivate.disabled = false;
+  }
+}
+
+addToGarden.addEventListener('click', () => resolveCompletion('community-garden'));
+keepPrivate.addEventListener('click', () => resolveCompletion('private'));
 
 toggle.addEventListener('change', async () => {
   try {
