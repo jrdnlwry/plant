@@ -9,6 +9,7 @@ export const deterministicPlantStateFixture = {
   health: 92,
   hydration: 78,
   growthProgress: 42,
+  totalGrowth: 242,
   flowerCount: 2,
   weatherMood: 'sunny',
   weatherSummary: 'Deterministic fixture weather',

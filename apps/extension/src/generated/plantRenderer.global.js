@@ -51,6 +51,7 @@ exports.defaultPlantStateSnapshot = {
     health: 85,
     hydration: 70,
     growthProgress: 0,
+    totalGrowth: 0,
     flowerCount: 0,
     weatherMood: 'starting',
     weatherSummary: 'Waiting for local weather',
@@ -75,15 +76,21 @@ function normalizePlantStateSnapshot(value, now = new Date().toISOString()) {
     const location = typeof input.location === 'string' ? input.location.trim() : '';
     const createdAt = typeof input.createdAt === 'string' && input.createdAt ? input.createdAt : now;
     const seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) >>> 0 : hashString(`${plantType}|${location}|${createdAt}`);
+    const legacyTotalGrowth = (clamp(input.growthStage ?? 1, 1, 4) - 1) * 100
+        + clamp(input.growthProgress ?? 0, 0, 100);
+    const totalGrowth = clamp(input.totalGrowth ?? legacyTotalGrowth, 0, 400);
+    const growthStage = totalGrowth >= 300 ? 4 : Math.floor(totalGrowth / 100) + 1;
+    const growthProgress = totalGrowth >= 300 ? totalGrowth - 300 : totalGrowth % 100;
     return {
         schemaVersion: versions_ts_1.plantStateVersion,
         rendererVersion: versions_ts_1.rendererVersion,
         plantType,
         location,
-        growthStage: clamp(input.growthStage ?? exports.defaultPlantStateSnapshot.growthStage, 1, 4),
+        growthStage,
         health: clamp(input.health ?? exports.defaultPlantStateSnapshot.health, 0, 100),
         hydration: clamp(input.hydration ?? exports.defaultPlantStateSnapshot.hydration, 0, 100),
-        growthProgress: clamp(input.growthProgress ?? exports.defaultPlantStateSnapshot.growthProgress, 0, 100),
+        growthProgress,
+        totalGrowth,
         flowerCount: clamp(input.flowerCount ?? exports.defaultPlantStateSnapshot.flowerCount, 0, 5),
         weatherMood: typeof input.weatherMood === 'string' ? input.weatherMood : exports.defaultPlantStateSnapshot.weatherMood,
         weatherSummary: typeof input.weatherSummary === 'string' ? input.weatherSummary : exports.defaultPlantStateSnapshot.weatherSummary,
@@ -101,6 +108,10 @@ function isPlantStateSnapshot(value) {
     if (!value || typeof value !== 'object')
         return false;
     const input = value;
+    const derivedStage = hasFiniteNumber(input.totalGrowth)
+        ? (input.totalGrowth >= 300 ? 4 : Math.floor(input.totalGrowth / 100) + 1) : 0;
+    const derivedProgress = hasFiniteNumber(input.totalGrowth)
+        ? (input.totalGrowth >= 300 ? input.totalGrowth - 300 : input.totalGrowth % 100) : -1;
     return input.schemaVersion === versions_ts_1.plantStateVersion
         && input.rendererVersion === versions_ts_1.rendererVersion
         && (0, plantTypes_ts_1.isPlantType)(input.plantType)
@@ -109,6 +120,8 @@ function isPlantStateSnapshot(value) {
         && hasFiniteNumber(input.health) && input.health >= 0 && input.health <= 100
         && hasFiniteNumber(input.hydration) && input.hydration >= 0 && input.hydration <= 100
         && hasFiniteNumber(input.growthProgress) && input.growthProgress >= 0 && input.growthProgress <= 100
+        && hasFiniteNumber(input.totalGrowth) && input.totalGrowth >= 0 && input.totalGrowth <= 400
+        && input.growthStage === derivedStage && input.growthProgress === derivedProgress
         && hasFiniteNumber(input.flowerCount) && input.flowerCount >= 0 && input.flowerCount <= 5
         && typeof input.weatherMood === 'string'
         && typeof input.weatherSummary === 'string'
@@ -266,10 +279,10 @@ function drawPixelLine(pixels, x1, y1, x2, y2, fill, thickness = 1) {
             addPixel(pixels, x + 1, y, fill);
     }
 }
-function deriveGrowthParameters(state) { const preset = plant_core_1.plantTypeDefinitions[state.plantType]; const stage = Math.round(state.growthStage); const healthRatio = state.health / 100; const hydrationRatio = state.hydration / 100; const windSpeed = state.weather?.windSpeed ?? 0; return { stage, lean: windSpeed >= 25 ? (windSpeed >= 40 ? 2 : 1) : 0, droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0), stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem, leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf, highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight, outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24', opacity: (0.55 + healthRatio * 0.45).toFixed(2), stepScale: 0.75 + stage * 0.18, iterations: Math.max(1, Math.min((L_SYSTEM_PRESETS[state.plantType]?.iterations || 2), stage === 1 ? 1 : stage === 2 ? 2 : 3)) }; }
+function deriveGrowthParameters(state) { const preset = plant_core_1.plantTypeDefinitions[state.plantType]; const stage = Math.round(state.growthStage); const healthRatio = state.health / 100; const hydrationRatio = state.hydration / 100; const windSpeed = state.weather?.windSpeed ?? 0; return { stage, lean: windSpeed >= 25 ? (windSpeed >= 40 ? 2 : 1) : 0, droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0), stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem, leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf, highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight, outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24', opacity: (0.55 + healthRatio * 0.45).toFixed(2), stepScale: 1.47, iterations: L_SYSTEM_PRESETS[state.plantType]?.iterations || 2 }; }
 function generateLSystem(state, params) {
     const config = L_SYSTEM_PRESETS[state.plantType] || L_SYSTEM_PRESETS.fern;
-    const rng = createRng(state.seed + params.stage * 1009);
+    const rng = createRng(state.seed);
     let sentence = config.axiom;
     for (let i = 0; i < params.iterations; i++) {
         sentence = sentence.split('').map((symbol) => { const rules = config.rules[symbol]; return rules ? weightedPick(rng, rules) : symbol; }).join('');
@@ -280,23 +293,29 @@ function stampLeaf(pixels, x, y, params, direction = 1) { const dy = Math.max(0,
 function stampFlower(pixels, x, y, petal, outline) { addPixel(pixels, x, y - 1, outline); addPixel(pixels, x - 1, y, outline); addPixel(pixels, x, y, petal); addPixel(pixels, x + 1, y, outline); addPixel(pixels, x, y + 1, '#f7d35b'); }
 function turtlePixelsFromLSystem(state, params) {
     const { sentence, config } = generateLSystem(state, params);
-    const rng = createRng(state.seed ^ 0xa53c9e7d ^ params.stage * 313);
+    const rng = createRng(state.seed ^ 0xa53c9e7d);
     const pixels = new Map();
     const stack = [];
     let turtle = { x: 16 + params.lean, y: 22, angle: config.startAngle + params.lean * 7, width: state.plantType === 'sapling' ? 2 : 1 };
     const stepLength = config.step * params.stepScale;
-    const angleJitter = 5 + params.stage;
+    const angleJitter = 9;
     if (state.plantType === 'succulent') {
-        const leaves = 7 + params.stage * 3;
+        const leaves = 19;
         for (let i = 0; i < leaves; i++) {
             const angle = (Math.PI * 2 * i) / leaves + rng() * 0.28;
-            const length = 3 + params.stage + Math.floor(rng() * 3);
+            const length = 7 + Math.floor(rng() * 3);
             const x2 = 16 + Math.cos(angle) * length;
             const y2 = 18 + Math.sin(angle) * Math.max(1.2, length * 0.55) + params.droop;
             drawPixelLine(pixels, 16, 19, x2, y2, params.outline);
             drawPixelLine(pixels, 16, 19, x2 - Math.cos(angle), y2, params.leafFill);
             addPixel(pixels, Math.round((16 + x2) / 2), Math.round((19 + y2) / 2) - 1, params.highlight);
         }
+        const entries = Array.from(pixels.entries());
+        pixels.clear();
+        for (const [key, fill] of entries.slice(0, Math.ceil(entries.length * (params.stage / 4))))
+            pixels.set(key, fill);
+        for (let i = 0; i < state.flowerCount; i++)
+            stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2), params.highlight, params.outline);
         return pixels;
     }
     for (const symbol of sentence.slice(0, 420)) {
@@ -324,16 +343,18 @@ function turtlePixelsFromLSystem(state, params) {
         }
         else if (symbol === 'L')
             stampLeaf(pixels, turtle.x, turtle.y, params, turtle.x < 16 ? -1 : 1);
-        else if (symbol === 'B') {
-            if (params.stage >= 3)
-                stampFlower(pixels, turtle.x, turtle.y, state.plantType === 'blossom' ? params.highlight : '#f06ca7', params.outline);
-        }
+        else if (symbol === 'B') { }
         else if (symbol === 'C') {
             addBlock(pixels, turtle.x - 1, turtle.y - 1, 3, 2, params.outline);
             addPixel(pixels, turtle.x, turtle.y - 1, params.leafFill);
             addPixel(pixels, turtle.x + 1, turtle.y - 1, params.highlight);
         }
     }
+    const permanentEntries = Array.from(pixels.entries());
+    const visibleCount = Math.ceil(permanentEntries.length * (params.stage / 4));
+    pixels.clear();
+    for (const [key, fill] of permanentEntries.slice(0, visibleCount))
+        pixels.set(key, fill);
     for (let i = 0; i < state.flowerCount; i++)
         stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2), params.highlight, params.outline);
     return pixels;
