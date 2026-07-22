@@ -297,11 +297,11 @@ test('migrates legacy revision and rejects stale same-plant whole-record saves',
   assert.equal(legacy.revision, 0);
   assert.equal(storage.ambientPlantState.revision, 0, 'migration is persisted');
 
-  const first = await api.savePlantState({ ...legacy, growthProgress: 30 }, { expectedRevision: 0 });
+  const first = await api.savePlantState({ ...legacy, totalGrowth: 130 }, { expectedRevision: 0 });
   assert.equal(first.revision, 1);
   assert.equal(first.growthProgress, 30);
 
-  const stale = await api.savePlantState({ ...legacy, growthProgress: 25, health: 1 }, { expectedRevision: 0 });
+  const stale = await api.savePlantState({ ...legacy, totalGrowth: 125, health: 1 }, { expectedRevision: 0 });
   assert.equal(stale.revision, 1);
   assert.equal(stale.growthProgress, 30);
   assert.notEqual(stale.health, 1);
@@ -317,8 +317,82 @@ test('growth progress does not reroll topology within a lifecycle stage', () => 
     hydration: 70,
     flowerCount: 0,
   }));
-  const later = { ...early, growthProgress: 99 };
+  const later = { ...early, growthProgress: 99, totalGrowth: 299 };
   assert.deepEqual(renderer.createPlantRenderModel(early).pixels, renderer.createPlantRenderModel(later).pixels);
+});
+
+test('derives stage and progress from monotonic lifetime growth while preserving overflow', () => {
+  const { api } = loadPlantStateApi();
+  const migrated = api.normalizePlantState({ growthStage: 2, growthProgress: 35 });
+  assert.equal(migrated.totalGrowth, 135);
+  assert.equal(migrated.growthStage, 2);
+  assert.equal(migrated.growthProgress, 35);
+
+  const now = Date.parse('2026-07-15T00:00:00.000Z');
+  const state = baseState(api, {
+    totalGrowth: 95,
+    health: 100,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    processedThrough: '2026-07-01T00:00:00.000Z',
+    lastWeatherObservationAt: baseWeather.fetchedAt,
+  });
+  const next = api.advancePlantState(state, baseWeather, now);
+  assert.equal(next.totalGrowth >= state.totalGrowth, true);
+  assert.equal(next.growthStage >= 2, true, 'one update may cross every earned boundary');
+  assert.equal(next.totalGrowth, (next.growthStage - 1) * 100 + next.growthProgress);
+});
+
+test('processes elapsed time and each weather observation at most once', () => {
+  const { api } = loadPlantStateApi();
+  const now = Date.parse('2026-07-15T00:00:00.000Z');
+  const state = baseState(api, {
+    totalGrowth: 100,
+    processedThrough: '2026-07-14T00:00:00.000Z',
+    lastWeatherObservationAt: '2026-07-14T00:00:00.000Z',
+  });
+  const observation = { ...baseWeather, recentSunHours: 24 };
+  const once = api.advancePlantState(state, observation, now);
+  const repeated = api.advancePlantState(once, observation, now);
+  assert.equal(repeated.totalGrowth, once.totalGrowth);
+  assert.equal(repeated.hydration, once.hydration);
+  assert.equal(repeated.flowerCount, once.flowerCount);
+  assert.equal(repeated.processedThrough, once.processedThrough);
+});
+
+test('rejects backward developmental growth for the same plant identity', async () => {
+  const { api } = loadPlantStateApi();
+  const current = await api.savePlantState(baseState(api, { totalGrowth: 240 }));
+  const saved = await api.savePlantState({ ...current, totalGrowth: 120 }, { expectedRevision: current.revision });
+  assert.equal(saved.totalGrowth, 240);
+  assert.equal(saved.growthStage, 3);
+  assert.equal(saved.growthProgress, 40);
+});
+
+test('flowerCount is the sole flower authority for every plant renderer', () => {
+  const { api, renderer } = loadPlantStateApi();
+  for (const plantType of Object.keys(api.PLANT_TYPES)) {
+    const bare = api.toRenderablePlantSnapshot(baseState(api, { plantType, totalGrowth: 300, flowerCount: 0 }));
+    const flowering = { ...bare, flowerCount: 1 };
+    const barePixels = renderer.createPlantRenderModel(bare).pixels;
+    const floweringPixels = renderer.createPlantRenderModel(flowering).pixels;
+    assert.notDeepEqual(floweringPixels, barePixels, `${plantType} renders persisted flowers through the shared path`);
+  }
+});
+
+test('permanent renderer coordinates grow append-only across stages', () => {
+  const { api, renderer } = loadPlantStateApi();
+  const coordinates = (stage) => {
+    const snapshot = api.toRenderablePlantSnapshot(baseState(api, {
+      totalGrowth: (stage - 1) * 100,
+      flowerCount: 0,
+      weatherMood: 'steady',
+    }));
+    return new Set(renderer.createPlantRenderModel(snapshot).pixels.map(({ x, y }) => `${x},${y}`));
+  };
+  const stages = [1, 2, 3, 4].map(coordinates);
+  for (let index = 1; index < stages.length; index += 1) {
+    for (const pixel of stages[index - 1]) assert.equal(stages[index].has(pixel), true, `${pixel} survives stage ${index + 1}`);
+  }
 });
 
 test('popup and overlay delegate active lifecycle mutations to the service worker', () => {

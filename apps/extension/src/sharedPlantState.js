@@ -20,6 +20,7 @@
     health: 85,
     hydration: 70,
     growthProgress: 0,
+    totalGrowth: 0,
     flowerCount: 0,
     weatherMood: 'starting',
     weatherSummary: 'Waiting for local weather',
@@ -27,6 +28,8 @@
     createdAt: null,
     updatedAt: null,
     weatherUpdatedAt: null,
+    processedThrough: null,
+    lastWeatherObservationAt: null,
     revision: 0,
   };
 
@@ -128,6 +131,11 @@
       ? Number(state.seed) >>> 0
       : 0;
 
+    const legacyTotalGrowth = (clamp(state.growthStage ?? 1, 1, 4) - 1) * 100
+      + clamp(state.growthProgress ?? 0, 0, 100);
+    const totalGrowth = clamp(state.totalGrowth ?? legacyTotalGrowth, 0, 400);
+    const growthStage = totalGrowth >= 300 ? 4 : Math.floor(totalGrowth / 100) + 1;
+    const growthProgress = totalGrowth >= 300 ? totalGrowth - 300 : totalGrowth % 100;
     return {
       ...DEFAULT_PLANT_STATE,
       ...state,
@@ -136,10 +144,11 @@
       seed,
       revision: Math.max(0, Math.floor(Number(state.revision) || 0)),
       location,
-      growthStage: clamp(state.growthStage ?? DEFAULT_PLANT_STATE.growthStage, 1, 4),
+      totalGrowth,
+      growthStage,
       health: clamp(state.health ?? DEFAULT_PLANT_STATE.health, 0, 100),
       hydration: clamp(state.hydration ?? DEFAULT_PLANT_STATE.hydration, 0, 100),
-      growthProgress: clamp(state.growthProgress ?? DEFAULT_PLANT_STATE.growthProgress, 0, 100),
+      growthProgress,
       flowerCount: clamp(state.flowerCount ?? DEFAULT_PLANT_STATE.flowerCount, 0, 5),
       weatherMood: typeof state.weatherMood === 'string' ? state.weatherMood : DEFAULT_PLANT_STATE.weatherMood,
       weatherSummary: typeof state.weatherSummary === 'string' ? state.weatherSummary : DEFAULT_PLANT_STATE.weatherSummary,
@@ -147,6 +156,8 @@
       createdAt: state.createdAt || now,
       updatedAt: state.updatedAt || now,
       weatherUpdatedAt: state.weatherUpdatedAt || null,
+      processedThrough: state.processedThrough || state.updatedAt || state.createdAt || now,
+      lastWeatherObservationAt: state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
     };
   }
 
@@ -155,7 +166,9 @@
       const state = result[STORAGE_KEY];
       if (!state) return null;
       const normalized = normalizePlantState(state);
-      if (!state.plantId || !Number.isFinite(Number(state.seed)) || !Number.isFinite(Number(state.revision))) {
+      if (!state.plantId || !Number.isFinite(Number(state.seed)) || !Number.isFinite(Number(state.revision))
+        || !Number.isFinite(Number(state.totalGrowth)) || !state.processedThrough
+        || !Object.prototype.hasOwnProperty.call(state, 'lastWeatherObservationAt')) {
         return chrome.storage.local.set({ [STORAGE_KEY]: normalized }).then(() => normalized);
       }
       return normalized;
@@ -180,12 +193,15 @@
   }
 
   async function savePlantState(nextState, options = {}) {
-    const candidate = normalizePlantState(nextState);
+    let candidate = normalizePlantState(nextState);
     const storedState = await getStoredPlantState();
     if (storedState && storedState.plantId !== candidate.plantId) return storedState;
 
     const expectedRevision = options.expectedRevision ?? candidate.revision;
     if (storedState && storedState.revision !== expectedRevision) return storedState;
+    if (storedState && candidate.totalGrowth < storedState.totalGrowth) {
+      candidate = normalizePlantState({ ...candidate, totalGrowth: storedState.totalGrowth });
+    }
 
     const state = normalizePlantState({
       ...candidate,
@@ -224,6 +240,7 @@
       health: 85,
       hydration: 70,
       growthProgress: 0,
+      totalGrowth: 0,
       flowerCount: 0,
       weatherMood: 'starting',
       weatherSummary: 'Weather will update after setup.',
@@ -305,8 +322,12 @@
   function advancePlantState(stateInput, weather = stateInput.weather, now = Date.now()) {
     const state = normalizePlantState(stateInput);
     if (isPlantLifecycleComplete(state)) return state;
-    const elapsedDays = clamp((now - Date.parse(state.updatedAt || state.createdAt)) / DAY_MS, 0, 7);
-    if (elapsedDays <= 0 && weather === state.weather) return state;
+    const processedTime = Date.parse(state.processedThrough || state.updatedAt || state.createdAt);
+    const elapsedDays = clamp((now - processedTime) / DAY_MS, 0, 7);
+    const observationAt = weather?.fetchedAt || null;
+    const isNewWeatherObservation = Boolean(observationAt)
+      && (!state.lastWeatherObservationAt || Date.parse(observationAt) > Date.parse(state.lastWeatherObservationAt));
+    if (elapsedDays <= 0 && !isNewWeatherObservation) return state;
 
     let hydrationDelta = -8 * elapsedDays;
     let healthDelta = -1.5 * elapsedDays;
@@ -314,12 +335,11 @@
     let mood = 'steady';
     let weatherEffectRatio = 0;
 
-    if (weather) {
-      const previousWeatherTime = Date.parse(state.weatherUpdatedAt || state.updatedAt || state.createdAt);
-      const elapsedWeatherMs = now - previousWeatherTime;
-      const elapsedWeatherRatio = state.weatherUpdatedAt
-        ? (elapsedWeatherMs >= WEATHER_EFFECT_MIN_ELAPSED_MS ? clamp(elapsedWeatherMs / WEATHER_REFRESH_MS, 0, 1) : 0)
-        : 1;
+    if (weather && isNewWeatherObservation) {
+      const previousWeatherTime = Date.parse(state.lastWeatherObservationAt || state.createdAt);
+      const elapsedWeatherMs = Math.max(0, Date.parse(observationAt) - previousWeatherTime);
+      const elapsedWeatherRatio = state.lastWeatherObservationAt
+        ? (elapsedWeatherMs >= WEATHER_EFFECT_MIN_ELAPSED_MS ? clamp(elapsedWeatherMs / WEATHER_REFRESH_MS, 0, 1) : 0) : 1;
       weatherEffectRatio = elapsedWeatherRatio;
       const rainIntensity = getRainIntensity(weather);
       if (rainIntensity !== 'none') {
@@ -351,12 +371,9 @@
 
     const hydration = clamp(state.hydration + hydrationDelta, 0, 100);
     const health = clamp(state.health + healthDelta + (hydration < 25 ? -6 * elapsedDays : 0), 0, 100);
-    let growthProgress = clamp(state.growthProgress + Math.max(0, growthDelta) * (health / 100), 0, 100);
-    let growthStage = state.growthStage;
-    if (growthProgress >= 100 && growthStage < 4) {
-      growthStage += 1;
-      growthProgress -= 100;
-    }
+    const totalGrowth = clamp(state.totalGrowth + Math.max(0, growthDelta) * (health / 100), state.totalGrowth, 400);
+    const growthStage = totalGrowth >= 300 ? 4 : Math.floor(totalGrowth / 100) + 1;
+    const growthProgress = totalGrowth >= 300 ? totalGrowth - 300 : totalGrowth % 100;
     const flowerMinStage = FLOWER_MIN_STAGE_BY_TYPE[state.plantType] ?? 4;
     const flowerChance = FLOWER_WEATHER_CHANCE_BY_TYPE[state.plantType] ?? 0;
     const flowerRng = createRng(state.seed + growthStage * 4099 + Math.floor(now / DAY_MS));
@@ -373,13 +390,16 @@
       health,
       growthProgress,
       growthStage,
+      totalGrowth,
       flowerCount,
       weather,
       weatherMood: mood,
       weatherSummary: describeWeather(weather),
-      weatherUpdatedAt: weatherEffectRatio > 0 || weather?.fetchedAt !== state.weather?.fetchedAt
+      weatherUpdatedAt: isNewWeatherObservation
         ? new Date(now).toISOString()
         : state.weatherUpdatedAt,
+      lastWeatherObservationAt: isNewWeatherObservation ? observationAt : state.lastWeatherObservationAt,
+      processedThrough: new Date(now).toISOString(),
       updatedAt: new Date(now).toISOString(),
     });
   }

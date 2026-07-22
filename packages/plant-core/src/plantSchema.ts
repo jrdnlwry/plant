@@ -11,6 +11,7 @@ export interface PlantStateSnapshot {
   health: number;
   hydration: number;
   growthProgress: number;
+  totalGrowth: number;
   flowerCount: number;
   weatherMood: string;
   weatherSummary: string;
@@ -30,6 +31,7 @@ export const defaultPlantStateSnapshot = {
   health: 85,
   hydration: 70,
   growthProgress: 0,
+  totalGrowth: 0,
   flowerCount: 0,
   weatherMood: 'starting',
   weatherSummary: 'Waiting for local weather',
@@ -58,15 +60,21 @@ export function normalizePlantStateSnapshot(value: unknown, now = new Date().toI
   const createdAt = typeof input.createdAt === 'string' && input.createdAt ? input.createdAt : now;
   const seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) >>> 0 : hashString(`${plantType}|${location}|${createdAt}`);
 
+  const legacyTotalGrowth = (clamp(input.growthStage ?? 1, 1, 4) - 1) * 100
+    + clamp(input.growthProgress ?? 0, 0, 100);
+  const totalGrowth = clamp(input.totalGrowth ?? legacyTotalGrowth, 0, 400);
+  const growthStage = totalGrowth >= 300 ? 4 : Math.floor(totalGrowth / 100) + 1;
+  const growthProgress = totalGrowth >= 300 ? totalGrowth - 300 : totalGrowth % 100;
   return {
     schemaVersion: plantStateVersion,
     rendererVersion,
     plantType,
     location,
-    growthStage: clamp(input.growthStage ?? defaultPlantStateSnapshot.growthStage, 1, 4),
+    growthStage,
     health: clamp(input.health ?? defaultPlantStateSnapshot.health, 0, 100),
     hydration: clamp(input.hydration ?? defaultPlantStateSnapshot.hydration, 0, 100),
-    growthProgress: clamp(input.growthProgress ?? defaultPlantStateSnapshot.growthProgress, 0, 100),
+    growthProgress,
+    totalGrowth,
     flowerCount: clamp(input.flowerCount ?? defaultPlantStateSnapshot.flowerCount, 0, 5),
     weatherMood: typeof input.weatherMood === 'string' ? input.weatherMood : defaultPlantStateSnapshot.weatherMood,
     weatherSummary: typeof input.weatherSummary === 'string' ? input.weatherSummary : defaultPlantStateSnapshot.weatherSummary,
@@ -86,6 +94,10 @@ export function isPlantStateSnapshot(value: unknown): value is PlantStateSnapsho
   if (!value || typeof value !== 'object') return false;
 
   const input = value as Record<keyof PlantStateSnapshot, unknown>;
+  const derivedStage = hasFiniteNumber(input.totalGrowth)
+    ? (input.totalGrowth >= 300 ? 4 : Math.floor(input.totalGrowth / 100) + 1) : 0;
+  const derivedProgress = hasFiniteNumber(input.totalGrowth)
+    ? (input.totalGrowth >= 300 ? input.totalGrowth - 300 : input.totalGrowth % 100) : -1;
   return input.schemaVersion === plantStateVersion
     && input.rendererVersion === rendererVersion
     && isPlantType(input.plantType)
@@ -94,6 +106,8 @@ export function isPlantStateSnapshot(value: unknown): value is PlantStateSnapsho
     && hasFiniteNumber(input.health) && input.health >= 0 && input.health <= 100
     && hasFiniteNumber(input.hydration) && input.hydration >= 0 && input.hydration <= 100
     && hasFiniteNumber(input.growthProgress) && input.growthProgress >= 0 && input.growthProgress <= 100
+    && hasFiniteNumber(input.totalGrowth) && input.totalGrowth >= 0 && input.totalGrowth <= 400
+    && input.growthStage === derivedStage && input.growthProgress === derivedProgress
     && hasFiniteNumber(input.flowerCount) && input.flowerCount >= 0 && input.flowerCount <= 5
     && typeof input.weatherMood === 'string'
     && typeof input.weatherSummary === 'string'
