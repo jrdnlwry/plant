@@ -8,6 +8,7 @@ function loadPlantStateApi() {
   const rendererSource = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/generated/plantRenderer.global.js'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/sharedPlantState.js'), 'utf8');
   const storage = {};
+  const storageControl = { failNextSet: false };
   const context = {
     console,
     Date,
@@ -24,7 +25,13 @@ function loadPlantStateApi() {
             if (Array.isArray(key)) return Object.fromEntries(key.map((entry) => [entry, storage[entry]]));
             return { [key]: storage[key] };
           },
-          set: async (value) => Object.assign(storage, value),
+          set: async (value) => {
+            if (storageControl.failNextSet) {
+              storageControl.failNextSet = false;
+              throw new Error('simulated storage failure');
+            }
+            Object.assign(storage, value);
+          },
         },
       },
       runtime: {
@@ -38,7 +45,7 @@ function loadPlantStateApi() {
   vm.createContext(context);
   vm.runInContext(rendererSource, context, { filename: 'plantRenderer.global.js' });
   vm.runInContext(source, context, { filename: 'sharedPlantState.js' });
-  return { api: context.PlantCompanionState, renderer: context.PlantCompanionRenderer, storage };
+  return { api: context.PlantCompanionState, renderer: context.PlantCompanionRenderer, storage, storageControl };
 }
 
 const baseWeather = Object.freeze({
@@ -207,16 +214,25 @@ test('archives a completed snapshot and restarts with fresh canonical identity',
 
   const pending = await api.getPendingLifecycleCompletion();
   assert.equal(pending.plantId, completed.plantId);
-  const result = await api.completePlantLifecycle('community-garden');
-  assert.equal(result.archivedPlant.decision, 'community-garden');
-  assert.equal(result.archivedPlant.plantId, completed.plantId);
-  assert.equal(result.archivedPlant.snapshot.seed, 88);
+  const saved = await api.getStoredPlantState();
+  const result = await api.completePlantLifecycle({
+    plantId: saved.plantId,
+    expectedRevision: saved.revision,
+    decision: 'accepted',
+  });
+  assert.equal(result.completedPlant.gardenDecision, 'accepted');
+  assert.equal(result.completedPlant.plantId, completed.plantId);
+  assert.equal(result.completedPlant.finalState.seed, 88);
+  assert.equal(result.publicationIntent.completedPlantId, result.completedPlant.completedPlantId);
+  assert.equal((await api.getPublicationIntents()).length, 1);
   assert.equal(result.nextPlant.plantId === completed.plantId, false);
   assert.equal(result.nextPlant.seed === completed.seed, false);
   assert.equal(result.nextPlant.growthStage, 1);
   assert.equal(result.nextPlant.growthProgress, 0);
   assert.equal(storage.ambientPlantPendingCompletion, null);
-  assert.equal(await api.completePlantLifecycle('community-garden'), null, 'the decision boundary is one-time');
+  const duplicate = await api.completePlantLifecycle({ plantId: completed.plantId, decision: 'accepted' });
+  assert.equal(duplicate.status, 'already-completed', 'the durable archive makes the decision idempotent');
+  assert.equal((await api.getPlantArchive()).length, 1);
 });
 
 test('rejects stale saves after a completed lifecycle restarts', async () => {
@@ -239,8 +255,73 @@ test('private archives are append-only from callers and reject invalid decisions
   await api.savePlantState(baseState(api, { growthStage: 4, growthProgress: 100 }));
   await api.completePlantLifecycle('private');
   const archive = await api.getPlantArchive();
-  archive[0].snapshot.location = 'Mutated, NC';
-  assert.equal((await api.getPlantArchive())[0].snapshot.location, 'Raleigh, NC');
+  archive[0].finalState.location = 'Mutated, NC';
+  assert.equal((await api.getPlantArchive())[0].finalState.location, 'Raleigh, NC');
+  assert.equal(archive[0].gardenDecision, 'declined');
+  assert.equal(archive[0].gardenSubmissionStatus, 'not-requested');
+  assert.equal((await api.getPublicationIntents()).length, 0);
+});
+
+test('maturity stores one durable pending timestamp while non-mature plants do not', async () => {
+  const { api } = loadPlantStateApi();
+  const growing = await api.savePlantState(baseState(api, { totalGrowth: 399, growthStage: 4, growthProgress: 99 }));
+  assert.equal(growing.completionPendingAt, undefined);
+  assert.equal((await api.getLifecycleCompletionStatus()).completionRequired, false);
+
+  const mature = await api.savePlantState({ ...growing, totalGrowth: 400 }, { expectedRevision: growing.revision });
+  const pendingAt = mature.completionPendingAt;
+  const repeated = await api.savePlantState({ ...mature }, { expectedRevision: mature.revision });
+  assert.equal(repeated.completionPendingAt, pendingAt);
+  assert.equal((await api.getLifecycleCompletionStatus()).completionRequired, true);
+});
+
+test('decline preserves an exact independent final state and monotonic reset revision', async () => {
+  const { api } = loadPlantStateApi();
+  const mature = await api.savePlantState(baseState(api, {
+    totalGrowth: 400,
+    flowerCount: 4,
+    weatherMood: 'sunny',
+  }));
+  const result = await api.completePlantLifecycle({
+    plantId: mature.plantId,
+    expectedRevision: mature.revision,
+    decision: 'declined',
+  });
+  assert.equal(result.nextPlant.revision, mature.revision + 1);
+  assert.equal(result.nextPlant.totalGrowth, 0);
+  assert.notEqual(result.nextPlant.plantId, mature.plantId);
+  result.nextPlant.weatherMood = 'changed';
+  assert.equal((await api.getPlantArchive())[0].finalState.weatherMood, 'sunny');
+});
+
+test('completion rejects stale identities and revisions without losing the mature plant', async () => {
+  const { api, storage } = loadPlantStateApi();
+  const mature = await api.savePlantState(baseState(api, { totalGrowth: 400 }));
+  await assert.rejects(
+    () => api.completePlantLifecycle({ plantId: 'stale', decision: 'declined' }),
+    /identity is stale/,
+  );
+  await assert.rejects(
+    () => api.completePlantLifecycle({ plantId: mature.plantId, expectedRevision: mature.revision - 1, decision: 'declined' }),
+    /revision is stale/,
+  );
+  assert.equal(storage.ambientPlantState.plantId, mature.plantId);
+  assert.equal(storage.ambientPlantArchive, undefined);
+});
+
+test('a failed atomic completion commit leaves the mature plant pending and retryable', async () => {
+  const { api, storage, storageControl } = loadPlantStateApi();
+  const mature = await api.savePlantState(baseState(api, { totalGrowth: 400 }));
+  const command = { plantId: mature.plantId, expectedRevision: mature.revision, decision: 'accepted' };
+  storageControl.failNextSet = true;
+  await assert.rejects(() => api.completePlantLifecycle(command), /simulated storage failure/);
+  assert.equal(storage.ambientPlantState.plantId, mature.plantId);
+  assert.equal(storage.ambientPlantPendingCompletion.plantId, mature.plantId);
+  assert.equal(storage.ambientPlantArchive, undefined);
+  const retried = await api.completePlantLifecycle(command);
+  assert.equal(retried.status, 'completed');
+  assert.equal(storage.ambientPlantArchive.length, 1);
+  assert.equal(storage.ambientPlantPublicationIntents.length, 1);
 });
 
 test('renders deterministically for identical normalized plant state', () => {
@@ -406,7 +487,12 @@ test('popup and overlay delegate active lifecycle mutations to the service worke
     assert.doesNotMatch(clientSource, /\.refreshPlantStateForWeather\s*\(/);
   }
   assert.match(popup, /PLANT_REQUEST_LIFECYCLE_UPDATE/);
+  assert.match(popup, /PLANT_REQUEST_COMPLETION_STATUS/);
+  assert.match(popup, /PLANT_COMPLETE_LIFECYCLE/);
   assert.match(overlay, /PLANT_REQUEST_LIFECYCLE_UPDATE/);
   assert.match(worker, /enqueueLifecycleMutation/);
   assert.match(worker, /expectedRevision: state\.revision/);
+  assert.match(worker, /PLANT_GET_COMPLETED_HISTORY/);
+  assert.match(worker, /PlantCompanionState\.completePlantLifecycle/);
+  assert.doesNotMatch(popup, /PlantCompanionState\.completePlantLifecycle/);
 });

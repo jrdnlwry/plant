@@ -13,6 +13,7 @@ const completionPreview = document.getElementById('completion-preview');
 const addToGarden = document.getElementById('add-to-garden');
 const keepPrivate = document.getElementById('keep-private');
 let weatherStatusMessage = '';
+let pendingCompletionCommand = null;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function getActiveTab() {
@@ -122,9 +123,12 @@ function renderSetup(state) {
 }
 
 async function renderCompletionDecision(state) {
-  const pending = await window.PlantCompanionState.getPendingLifecycleCompletion();
-  const shouldDecide = Boolean(state && pending?.plantId === state.plantId
-    && window.PlantCompanionState.isPlantLifecycleComplete(state));
+  const response = await requestLifecycleMutation({ type: 'PLANT_REQUEST_COMPLETION_STATUS' });
+  const status = response.completionStatus;
+  const shouldDecide = Boolean(state && status?.completionRequired && status.plantId === state.plantId);
+  pendingCompletionCommand = shouldDecide
+    ? { plantId: status.plantId, expectedRevision: status.expectedRevision }
+    : null;
   completionPanel.hidden = !shouldDecide;
   plantPanel.hidden = shouldDecide || !state;
   if (shouldDecide) completionPreview.innerHTML = window.PlantCompanionState.renderPlantSvg(state);
@@ -225,13 +229,19 @@ async function resolveCompletion(decision) {
   addToGarden.disabled = true;
   keepPrivate.disabled = true;
   try {
-    const response = await requestLifecycleMutation({ type: 'PLANT_COMPLETE_LIFECYCLE', decision });
+    if (!pendingCompletionCommand) throw new Error('This plant no longer needs a completion decision.');
+    const response = await requestLifecycleMutation({
+      type: 'PLANT_COMPLETE_LIFECYCLE',
+      ...pendingCompletionCommand,
+      decision,
+    });
     const result = response.completion;
     if (!result) throw new Error('This plant lifecycle was already restarted.');
     completionPanel.hidden = true;
     renderSetup(result.nextPlant);
     await renderStoredPlantOnActiveTab();
-    setStatus(decision === 'community-garden'
+    pendingCompletionCommand = null;
+    setStatus(decision === 'accepted'
       ? 'Plant archived privately and garden intent saved. A new plant has started.'
       : 'Plant archived privately. A new plant has started.');
   } catch (error) {
@@ -242,8 +252,8 @@ async function resolveCompletion(decision) {
   }
 }
 
-addToGarden.addEventListener('click', () => resolveCompletion('community-garden'));
-keepPrivate.addEventListener('click', () => resolveCompletion('private'));
+addToGarden.addEventListener('click', () => resolveCompletion('accepted'));
+keepPrivate.addEventListener('click', () => resolveCompletion('declined'));
 
 toggle.addEventListener('change', async () => {
   try {
