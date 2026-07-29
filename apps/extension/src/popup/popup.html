@@ -64,7 +64,14 @@
         <p class="helper">Future garden publication will share only approved public information: contributor first name and state, plant appearance, and plant statistics.</p>
         <button id="add-to-garden" type="button">Accept and add to the community garden</button>
         <button id="keep-private" type="button" class="secondary-button">Keep this plant private and start over</button>
-        <p class="helper">Garden publishing is not available yet. Explicit acceptance safely records your intent; nothing is submitted now.</p>
+        <p class="helper">Acceptance saves a private archive and pending intent. Publication happens only when you submit it below.</p>
+      </section>
+
+      <section id="publication-panel" class="panel" hidden aria-labelledby="publication-title">
+        <h2 id="publication-title">Community garden</h2>
+        <p id="publication-state" class="helper"></p>
+        <button id="submit-publication" type="button">Submit to garden</button>
+        <a id="publication-path" hidden target="_blank" rel="noreferrer">Open garden location</a>
       </section>
 
       <label class="toggle-row">

@@ -156,11 +156,13 @@ function isPlantType(value) {
 "packages/plant-core/src/publicationContracts.ts": function(module, exports, require) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.COMPLETED_PLANT_SNAPSHOT_VERSION = exports.PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = void 0;
+exports.COMPLETED_PLANT_SNAPSHOT_VERSION = exports.PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = exports.GARDEN_RENDERER_SNAPSHOT_VERSION = exports.GARDEN_PUBLICATION_CONTRACT_VERSION = void 0;
 exports.validatePublicationAuthorizationRequest = validatePublicationAuthorizationRequest;
 exports.canTransitionAccountLinkChallenge = canTransitionAccountLinkChallenge;
 exports.canTransitionPublicationSubmission = canTransitionPublicationSubmission;
 exports.canTransitionGardenPlantVisibility = canTransitionGardenPlantVisibility;
+exports.GARDEN_PUBLICATION_CONTRACT_VERSION = 1;
+exports.GARDEN_RENDERER_SNAPSHOT_VERSION = 1;
 exports.PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = 1;
 exports.COMPLETED_PLANT_SNAPSHOT_VERSION = 1;
 const OPAQUE_LOCAL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;

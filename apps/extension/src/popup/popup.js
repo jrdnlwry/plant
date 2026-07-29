@@ -16,6 +16,10 @@ const accountLinkState = document.getElementById('account-link-state');
 const linkAccount = document.getElementById('link-account');
 const refreshAccountLink = document.getElementById('refresh-account-link');
 const clearAccountLink = document.getElementById('clear-account-link');
+const publicationPanel = document.getElementById('publication-panel');
+const publicationState = document.getElementById('publication-state');
+const submitPublication = document.getElementById('submit-publication');
+const publicationPath = document.getElementById('publication-path');
 let weatherStatusMessage = '';
 let pendingCompletionCommand = null;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -145,6 +149,28 @@ async function requestLifecycleMutation(message) {
   return response;
 }
 
+async function renderPublicationStatus() {
+  const response = await requestLifecycleMutation({ type: 'PLANT_GET_PUBLICATION_STATUS' });
+  const publication = response.publication;
+  publicationPanel.hidden = publication?.status === 'none';
+  if (publicationPanel.hidden) return;
+  const labels = { pending: 'Pending publication.', submitting: 'Submission in progress…', failed: publication.error?.message || 'Submission failed.', submitted: 'Published successfully.' };
+  publicationState.textContent = labels[publication.status] || 'Pending publication.';
+  submitPublication.hidden = publication.status === 'submitted';
+  submitPublication.disabled = publication.status === 'submitting';
+  submitPublication.textContent = publication.status === 'failed' ? 'Retry submission' : 'Submit to garden';
+  submitPublication.dataset.publicationIntentId = publication.publicationIntentId || '';
+  publicationPath.hidden = publication.status !== 'submitted';
+  if (publication.receipt?.publicGardenPath) publicationPath.href = `http://localhost:3000${publication.receipt.publicGardenPath}`;
+}
+submitPublication.addEventListener('click', async () => {
+  submitPublication.disabled = true;
+  publicationState.textContent = 'Submission in progress…';
+  try { await requestLifecycleMutation({ type: 'PLANT_RETRY_PUBLICATION_INTENT', publicationIntentId: submitPublication.dataset.publicationIntentId }); }
+  catch (error) { publicationState.textContent = error.message || 'Submission failed.'; }
+  await renderPublicationStatus();
+});
+
 function renderAccountLink(state) {
   const labels = { unlinked: 'Not linked. Private extension use remains available.', pending: 'Linking pending. Approve in the website, then check status.', linked: 'Linked. Future publication requests can be authenticated.', failed: 'Link failed. Retry when ready.', revoked: 'This installation link was revoked.' };
   accountLinkState.textContent = labels[state?.status] || labels.unlinked;
@@ -267,6 +293,7 @@ async function resolveCompletion(decision) {
     setStatus(decision === 'accepted'
       ? 'Plant archived privately and garden intent saved. A new plant has started.'
       : 'Plant archived privately. A new plant has started.');
+    await renderPublicationStatus();
   } catch (error) {
     setStatus(error.message || 'Could not restart the plant lifecycle.');
   } finally {
@@ -299,3 +326,4 @@ toggle.addEventListener('change', async () => {
 syncPlantState();
 syncToggleFromCurrentTab();
 accountLinkCommand('PLANT_GET_ACCOUNT_LINK_STATUS');
+renderPublicationStatus();
