@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { biomeForState, GARDEN_LAYOUTS, PublicationValidationError, validateGardenPublicationRequest } from '../lib/garden/publication.ts';
 
@@ -25,6 +26,12 @@ test('each deterministic biome layout has 96 unique cells and 72 plantable plots
     assert.equal(layout.filter(({ plotType }) => plotType !== 'plantable').length, 24);
     assert.ok(layout.every(({ row, column }) => row >= 0 && row < 8 && column >= 0 && column < 12));
   }
+});
+
+test('publication receipts link to the implemented garden route', () => {
+  const sql = readFileSync(new URL('../../../supabase/migrations/20260730000000_garden_publication_foundation.sql', import.meta.url), 'utf8');
+  assert.match(sql, /'\/garden\?biome='\|\|p_biome::text\|\|'&garden='\|\|g\.garden_number\|\|'&plant='\|\|gp\.id/);
+  assert.doesNotMatch(sql, /'\/garden\/'\|\|p_biome/);
 });
 
 const request = {

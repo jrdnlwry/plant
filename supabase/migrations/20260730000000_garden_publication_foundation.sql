@@ -121,7 +121,7 @@ begin
         values(p_source_local_plant_id,p_completed_plant_id,p_publication_intent_id,p_owner_public_id,p_plant_type,p_visual_seed,p_snapshot,p_snapshot_version,p_snapshot_digest,p_biome,g.id,p.id,p.row_number,p.column_number,p_created_at,p_matured_at) returning * into gp;
       update public.garden_plants set root_plant_id=id where id=gp.id;
       insert into public.plant_publication_receipts(account_id,publication_intent_id,completed_plant_id,source_local_plant_id,garden_plant_id,garden_id,biome,garden_number,plot_id,row_number,column_number,public_garden_path,snapshot_digest)
-        values(p_account_id,p_publication_intent_id,p_completed_plant_id,p_source_local_plant_id,gp.id,g.id,p_biome,g.garden_number,p.id,p.row_number,p.column_number,'/garden/'||p_biome::text||'/'||g.garden_number||'?plant='||gp.id,p_snapshot_digest) returning * into r;
+        values(p_account_id,p_publication_intent_id,p_completed_plant_id,p_source_local_plant_id,gp.id,g.id,p_biome,g.garden_number,p.id,p.row_number,p.column_number,'/garden?biome='||p_biome::text||'&garden='||g.garden_number||'&plant='||gp.id,p_snapshot_digest) returning * into r;
       select count(*) into occupied from public.garden_plants where garden_id=g.id;
       update public.gardens set status=case when occupied >= new_submission_capacity then 'closed-to-new-plants'::public.garden_status when occupied >= 55 then 'near-capacity'::public.garden_status else status end, closed_at=case when occupied >= new_submission_capacity then now() else closed_at end where id=g.id;
     end if;
