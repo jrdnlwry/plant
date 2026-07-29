@@ -247,7 +247,21 @@ function handleLifecycleMessage(message) {
   }
   if (message.type === 'PLANT_COMPLETE_LIFECYCLE') {
     return enqueueLifecycleMutation(null, async () => ({
-      completion: await globalThis.PlantCompanionState.completePlantLifecycle(message.decision),
+      completion: await globalThis.PlantCompanionState.completePlantLifecycle({
+        plantId: message.plantId,
+        decision: message.decision,
+        expectedRevision: message.expectedRevision,
+      }),
+    }));
+  }
+  if (message.type === 'PLANT_REQUEST_COMPLETION_STATUS') {
+    return enqueueLifecycleMutation(null, async () => ({
+      completionStatus: await globalThis.PlantCompanionState.getLifecycleCompletionStatus(),
+    }));
+  }
+  if (message.type === 'PLANT_GET_COMPLETED_HISTORY') {
+    return enqueueLifecycleMutation(null, async () => ({
+      completedHistory: await globalThis.PlantCompanionState.getPlantArchive(),
     }));
   }
   return null;

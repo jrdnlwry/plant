@@ -2,6 +2,7 @@
   const STORAGE_KEY = 'ambientPlantState';
   const ARCHIVE_STORAGE_KEY = 'ambientPlantArchive';
   const COMPLETION_STORAGE_KEY = 'ambientPlantPendingCompletion';
+  const PUBLICATION_INTENTS_STORAGE_KEY = 'ambientPlantPublicationIntents';
   const RENDERER_VERSION = 'l-system-pixel-v2';
   const WEATHER_REFRESH_MS = 60 * 60 * 1000;
   const WEATHER_EFFECT_MIN_ELAPSED_MS = 60 * 1000;
@@ -162,13 +163,23 @@
   }
 
   function getStoredPlantState() {
-    return chrome.storage.local.get(STORAGE_KEY).then((result) => {
+    return chrome.storage.local.get([STORAGE_KEY, COMPLETION_STORAGE_KEY]).then((result) => {
       const state = result[STORAGE_KEY];
       if (!state) return null;
-      const normalized = normalizePlantState(state);
+      const legacyPending = result[COMPLETION_STORAGE_KEY];
+      const normalized = normalizePlantState({
+        ...state,
+        ...(isPlantLifecycleComplete(state) && legacyPending?.plantId === state.plantId && !state.completionPendingAt
+          ? {
+              completionPendingAt: legacyPending.completionPendingAt || legacyPending.completedAt || state.updatedAt,
+              maturedAt: legacyPending.completionPendingAt || legacyPending.completedAt || state.updatedAt,
+            }
+          : {}),
+      });
       if (!state.plantId || !Number.isFinite(Number(state.seed)) || !Number.isFinite(Number(state.revision))
         || !Number.isFinite(Number(state.totalGrowth)) || !state.processedThrough
-        || !Object.prototype.hasOwnProperty.call(state, 'lastWeatherObservationAt')) {
+        || !Object.prototype.hasOwnProperty.call(state, 'lastWeatherObservationAt')
+        || normalized.completionPendingAt !== state.completionPendingAt) {
         return chrome.storage.local.set({ [STORAGE_KEY]: normalized }).then(() => normalized);
       }
       return normalized;
@@ -185,10 +196,30 @@
     return result[COMPLETION_STORAGE_KEY] || null;
   }
 
+  async function getLifecycleCompletionStatus() {
+    const [plant, pending] = await Promise.all([getStoredPlantState(), getPendingLifecycleCompletion()]);
+    const completionRequired = Boolean(plant && isPlantLifecycleComplete(plant)
+      && plant.completionPendingAt && !plant.completionHandledAt && pending?.plantId === plant.plantId);
+    return {
+      completionRequired,
+      plantId: completionRequired ? plant.plantId : null,
+      expectedRevision: completionRequired ? plant.revision : null,
+      completionPendingAt: completionRequired ? plant.completionPendingAt : null,
+      plant: completionRequired ? plant : null,
+    };
+  }
+
   async function getPlantArchive() {
     const result = await chrome.storage.local.get(ARCHIVE_STORAGE_KEY);
     return Array.isArray(result[ARCHIVE_STORAGE_KEY])
       ? cloneStoredValue(result[ARCHIVE_STORAGE_KEY])
+      : [];
+  }
+
+  async function getPublicationIntents() {
+    const result = await chrome.storage.local.get(PUBLICATION_INTENTS_STORAGE_KEY);
+    return Array.isArray(result[PUBLICATION_INTENTS_STORAGE_KEY])
+      ? cloneStoredValue(result[PUBLICATION_INTENTS_STORAGE_KEY])
       : [];
   }
 
@@ -203,7 +234,7 @@
       candidate = normalizePlantState({ ...candidate, totalGrowth: storedState.totalGrowth });
     }
 
-    const state = normalizePlantState({
+    let state = normalizePlantState({
       ...candidate,
       revision: (storedState?.revision ?? expectedRevision) + 1,
       updatedAt: options.updatedAt || candidate.updatedAt || new Date().toISOString(),
@@ -212,13 +243,19 @@
       await chrome.storage.local.set({ [STORAGE_KEY]: state });
       return state;
     }
+    const completionPendingAt = state.completionPendingAt || state.updatedAt;
+    state = normalizePlantState({
+      ...state,
+      maturedAt: state.maturedAt || completionPendingAt,
+      completionPendingAt,
+      completionHandledAt: null,
+    });
     const pending = await getPendingLifecycleCompletion();
     const completion = pending?.plantId === state.plantId
       ? pending
       : {
           plantId: state.plantId,
-          completedAt: state.updatedAt,
-          snapshot: toRenderablePlantSnapshot(state),
+          completionPendingAt,
         };
     await chrome.storage.local.set({
       [STORAGE_KEY]: state,
@@ -227,7 +264,7 @@
     return state;
   }
 
-  function createInitialPlantState({ plantType, location }) {
+  function createInitialPlantState({ plantType, location, revision = 0 }) {
     const now = new Date().toISOString();
     const plantId = createPlantId();
     return normalizePlantState({
@@ -235,7 +272,7 @@
       plantType,
       location,
       seed: createVisualSeed(plantId),
-      revision: 0,
+      revision,
       growthStage: 1,
       health: 85,
       hydration: 70,
@@ -249,32 +286,87 @@
     });
   }
 
-  async function completePlantLifecycle(decision) {
-    if (decision !== 'community-garden' && decision !== 'private') {
+  async function completePlantLifecycle(command, legacyOptions = {}) {
+    const request = typeof command === 'string'
+      ? { decision: command === 'community-garden' ? 'accepted' : command === 'private' ? 'declined' : command, ...legacyOptions }
+      : command || {};
+    const { plantId, expectedRevision } = request;
+    const decision = request.decision;
+    if (decision !== 'accepted' && decision !== 'declined') {
       throw new TypeError('Invalid lifecycle completion decision.');
     }
-    const [plant, pending, archive] = await Promise.all([
+    const [plant, pending, archive, publicationIntents] = await Promise.all([
       getStoredPlantState(),
       getPendingLifecycleCompletion(),
       getPlantArchive(),
+      getPublicationIntents(),
     ]);
-    if (!plant || !pending || pending.plantId !== plant.plantId || !isPlantLifecycleComplete(plant)) return null;
 
-    const archivedAt = new Date().toISOString();
-    const archivedPlant = {
+    const requestedPlantId = plantId || plant?.plantId;
+    const existing = archive.find((record) => record.plantId === requestedPlantId);
+    if (existing) {
+      return {
+        status: 'already-completed',
+        completedPlant: cloneStoredValue(existing),
+        nextPlant: plant,
+      };
+    }
+    if (!plant || requestedPlantId !== plant.plantId) throw new Error('The active plant identity is stale.');
+    if (expectedRevision !== undefined && expectedRevision !== plant.revision) {
+      throw new Error('The active plant revision is stale.');
+    }
+    if (!isPlantLifecycleComplete(plant)) throw new Error('The active plant is not fully mature.');
+    if (!plant.completionPendingAt || !pending || pending.plantId !== plant.plantId) {
+      throw new Error('Plant completion is not pending.');
+    }
+
+    const completedAt = new Date().toISOString();
+    const finalState = cloneStoredValue(plant);
+    const completedPlantId = `completed-${plant.plantId}`;
+    const publicationIntentId = decision === 'accepted' ? `publication-${completedPlantId}` : undefined;
+    const completedPlant = {
       plantId: plant.plantId,
-      completedAt: pending.completedAt,
-      archivedAt,
-      decision,
-      snapshot: pending.snapshot || toRenderablePlantSnapshot(plant),
+      completedPlantId,
+      plantType: plant.plantType,
+      visualSeed: String(plant.seed),
+      createdAt: plant.createdAt,
+      maturedAt: plant.maturedAt || plant.completionPendingAt,
+      completedAt,
+      finalState,
+      gardenDecision: decision,
+      gardenSubmissionStatus: decision === 'accepted' ? 'pending' : 'not-requested',
+      ...(publicationIntentId ? { publicationIntentId } : {}),
     };
-    const nextPlant = createInitialPlantState({ plantType: plant.plantType, location: plant.location });
+    const publicationIntent = publicationIntentId ? {
+      publicationIntentId,
+      submissionId: publicationIntentId,
+      localPlantId: plant.plantId,
+      completedPlantId,
+      snapshot: cloneStoredValue(toRenderablePlantSnapshot(finalState)),
+      state: 'pending',
+      createdAt: completedAt,
+    } : null;
+    const nextPlant = createInitialPlantState({
+      plantType: plant.plantType,
+      location: plant.location,
+      revision: plant.revision + 1,
+    });
+    // chrome.storage.local.set commits this multi-key record as one storage operation.
+    // If it rejects, the mature active plant and its pending marker remain retryable.
     await chrome.storage.local.set({
       [STORAGE_KEY]: nextPlant,
-      [ARCHIVE_STORAGE_KEY]: [...archive, archivedPlant],
+      [ARCHIVE_STORAGE_KEY]: [...archive, completedPlant],
+      [PUBLICATION_INTENTS_STORAGE_KEY]: publicationIntent
+        ? [...publicationIntents, publicationIntent]
+        : publicationIntents,
       [COMPLETION_STORAGE_KEY]: null,
     });
-    return { archivedPlant: cloneStoredValue(archivedPlant), nextPlant };
+    return {
+      status: 'completed',
+      completedPlant: cloneStoredValue(completedPlant),
+      publicationIntent: cloneStoredValue(publicationIntent),
+      nextPlant,
+    };
   }
 
   function shouldRefreshWeather(state, now = Date.now()) {
@@ -461,7 +553,9 @@
     FLOWER_MIN_STAGE_BY_TYPE,
     isPlantLifecycleComplete,
     getPendingLifecycleCompletion,
+    getLifecycleCompletionStatus,
     getPlantArchive,
+    getPublicationIntents,
     completePlantLifecycle,
     getStoredPlantState,
     savePlantState,
