@@ -12,6 +12,10 @@ const completionPanel = document.getElementById('completion-panel');
 const completionPreview = document.getElementById('completion-preview');
 const addToGarden = document.getElementById('add-to-garden');
 const keepPrivate = document.getElementById('keep-private');
+const accountLinkState = document.getElementById('account-link-state');
+const linkAccount = document.getElementById('link-account');
+const refreshAccountLink = document.getElementById('refresh-account-link');
+const clearAccountLink = document.getElementById('clear-account-link');
 let weatherStatusMessage = '';
 let pendingCompletionCommand = null;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -140,6 +144,25 @@ async function requestLifecycleMutation(message) {
   if (!response?.ok) throw new Error(response?.error || 'Lifecycle update failed.');
   return response;
 }
+
+function renderAccountLink(state) {
+  const labels = { unlinked: 'Not linked. Private extension use remains available.', pending: 'Linking pending. Approve in the website, then check status.', linked: 'Linked. Future publication requests can be authenticated.', failed: 'Link failed. Retry when ready.', revoked: 'This installation link was revoked.' };
+  accountLinkState.textContent = labels[state?.status] || labels.unlinked;
+  linkAccount.textContent = state?.status === 'failed' ? 'Retry linking' : 'Link account';
+  linkAccount.hidden = state?.status === 'linked' || state?.status === 'pending' || state?.status === 'revoked';
+  refreshAccountLink.hidden = state?.status !== 'pending';
+  // Remote revocation is intentionally deferred; never discard a working credential locally.
+  clearAccountLink.hidden = true;
+}
+async function accountLinkCommand(type) {
+  for (const button of [linkAccount, refreshAccountLink, clearAccountLink]) button.disabled = true;
+  try { const response = await requestLifecycleMutation({ type }); renderAccountLink(response.accountLink); }
+  catch (error) { accountLinkState.textContent = error.message || 'Account linking failed.'; }
+  finally { for (const button of [linkAccount, refreshAccountLink, clearAccountLink]) button.disabled = false; }
+}
+linkAccount.addEventListener('click', () => accountLinkCommand('PLANT_BEGIN_ACCOUNT_LINK'));
+refreshAccountLink.addEventListener('click', () => accountLinkCommand('PLANT_REFRESH_ACCOUNT_LINK'));
+clearAccountLink.addEventListener('click', () => accountLinkCommand('PLANT_CLEAR_ACCOUNT_LINK'));
 
 async function syncPlantState(options = {}) {
   const storedState = await window.PlantCompanionState.getStoredPlantState();
@@ -275,3 +298,4 @@ toggle.addEventListener('change', async () => {
 
 syncPlantState();
 syncToggleFromCurrentTab();
+accountLinkCommand('PLANT_GET_ACCOUNT_LINK_STATUS');

@@ -29,6 +29,7 @@ __exportStar(require("packages/plant-core/src/plantSchema.ts"), exports);
 __exportStar(require("packages/plant-core/src/weatherSchema.ts"), exports);
 __exportStar(require("packages/plant-core/src/versions.ts"), exports);
 __exportStar(require("packages/plant-core/src/serialization.ts"), exports);
+__exportStar(require("packages/plant-core/src/publicationContracts.ts"), exports);
 
 },
 "packages/plant-core/src/plantSchema.ts": function(module, exports, require) {
@@ -149,6 +150,63 @@ exports.plantTypeDefinitions = {
 };
 function isPlantType(value) {
     return typeof value === 'string' && exports.plantTypes.includes(value);
+}
+
+},
+"packages/plant-core/src/publicationContracts.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.COMPLETED_PLANT_SNAPSHOT_VERSION = exports.PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = void 0;
+exports.validatePublicationAuthorizationRequest = validatePublicationAuthorizationRequest;
+exports.canTransitionAccountLinkChallenge = canTransitionAccountLinkChallenge;
+exports.canTransitionPublicationSubmission = canTransitionPublicationSubmission;
+exports.canTransitionGardenPlantVisibility = canTransitionGardenPlantVisibility;
+exports.PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = 1;
+exports.COMPLETED_PLANT_SNAPSHOT_VERSION = 1;
+const OPAQUE_LOCAL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+function validatePublicationAuthorizationRequest(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new TypeError('Invalid publication intent');
+    const input = value;
+    const allowed = ['publicationIntentId', 'completedPlantId', 'localPlantId', 'installationId', 'contractVersion', 'snapshotVersion', 'snapshotDigest'];
+    if (Object.keys(input).some((key) => !allowed.includes(key)))
+        throw new TypeError('Invalid publication intent');
+    for (const key of ['publicationIntentId', 'completedPlantId', 'localPlantId', 'installationId']) {
+        if (typeof input[key] !== 'string' || !OPAQUE_LOCAL_ID.test(input[key]))
+            throw new TypeError(`Invalid ${key}`);
+    }
+    if (!Number.isInteger(input.contractVersion) || !Number.isInteger(input.snapshotVersion))
+        throw new TypeError('Invalid version');
+    if (input.snapshotDigest !== undefined && (typeof input.snapshotDigest !== 'string' || !/^[a-f0-9]{64}$/i.test(input.snapshotDigest)))
+        throw new TypeError('Invalid snapshot digest');
+    return input;
+}
+const ACCOUNT_LINK_TRANSITIONS = {
+    pending: ['claimed', 'expired', 'cancelled'],
+    claimed: ['consumed', 'expired', 'cancelled'],
+    consumed: [],
+    expired: [],
+    cancelled: [],
+};
+const SUBMISSION_TRANSITIONS = {
+    pending: ['accepted', 'rejected', 'duplicate'],
+    accepted: [],
+    rejected: [],
+    duplicate: [],
+};
+const VISIBILITY_TRANSITIONS = {
+    public: ['hidden', 'removed'],
+    hidden: ['public', 'removed'],
+    removed: [],
+};
+function canTransitionAccountLinkChallenge(from, to) {
+    return ACCOUNT_LINK_TRANSITIONS[from].includes(to);
+}
+function canTransitionPublicationSubmission(from, to) {
+    return SUBMISSION_TRANSITIONS[from].includes(to);
+}
+function canTransitionGardenPlantVisibility(from, to) {
+    return VISIBILITY_TRANSITIONS[from].includes(to);
 }
 
 },
