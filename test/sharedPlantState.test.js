@@ -496,3 +496,10 @@ test('popup and overlay delegate active lifecycle mutations to the service worke
   assert.match(worker, /PlantCompanionState\.completePlantLifecycle/);
   assert.doesNotMatch(popup, /PlantCompanionState\.completePlantLifecycle/);
 });
+
+test('pending publication intent becomes identity-only authorization metadata', () => {
+  const { api } = loadPlantStateApi();
+  const request = api.toPublicationAuthorizationRequest({ state: 'pending', publicationIntentId: 'publication-completed-plant-1234', completedPlantId: 'completed-plant-1234', localPlantId: 'plant-1234', snapshot: { private: 'not sent' } }, `inst_${'a'.repeat(48)}`);
+  assert.deepEqual(JSON.parse(JSON.stringify(request)), { publicationIntentId: 'publication-completed-plant-1234', completedPlantId: 'completed-plant-1234', localPlantId: 'plant-1234', installationId: `inst_${'a'.repeat(48)}`, contractVersion: 1, snapshotVersion: 1 });
+  assert.equal('snapshot' in request, false);
+});

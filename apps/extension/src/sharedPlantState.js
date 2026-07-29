@@ -223,6 +223,23 @@
       : [];
   }
 
+  function toPublicationAuthorizationRequest(intent, installationId) {
+    if (!intent || typeof intent !== 'object' || intent.state !== 'pending'
+      || typeof intent.publicationIntentId !== 'string' || typeof intent.completedPlantId !== 'string'
+      || typeof intent.localPlantId !== 'string' || typeof installationId !== 'string') {
+      throw new TypeError('Invalid pending publication intent.');
+    }
+    return {
+      publicationIntentId: intent.publicationIntentId,
+      completedPlantId: intent.completedPlantId,
+      localPlantId: intent.localPlantId,
+      installationId,
+      contractVersion: 1,
+      snapshotVersion: 1,
+      ...(typeof intent.snapshotDigest === 'string' ? { snapshotDigest: intent.snapshotDigest } : {}),
+    };
+  }
+
   async function savePlantState(nextState, options = {}) {
     let candidate = normalizePlantState(nextState);
     const storedState = await getStoredPlantState();
@@ -556,6 +573,7 @@
     getLifecycleCompletionStatus,
     getPlantArchive,
     getPublicationIntents,
+    toPublicationAuthorizationRequest,
     completePlantLifecycle,
     getStoredPlantState,
     savePlantState,

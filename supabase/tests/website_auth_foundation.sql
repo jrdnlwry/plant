@@ -1,5 +1,5 @@
 begin;
-select plan(10);
+select plan(18);
 select has_table('public', 'account_profiles', 'private profile table exists');
 select has_table('public', 'public_contributors', 'contributor table exists');
 select ok(
@@ -83,6 +83,15 @@ select hasnt_column(
   'longitude',
   'profiles omit exact longitude'
 );
+
+select has_table('public', 'extension_installations', 'installation table exists');
+select has_table('public', 'account_link_challenges', 'link challenge table exists');
+select has_table('public', 'installation_credentials', 'credential table exists');
+select has_column('public', 'account_link_challenges', 'token_hash', 'challenge stores a token hash');
+select hasnt_column('public', 'account_link_challenges', 'token', 'challenge does not store a raw token');
+select has_column('public', 'installation_credentials', 'credential_hash', 'credential stores a hash');
+select hasnt_column('public', 'installation_credentials', 'credential', 'credential does not store raw material');
+select ok((select relrowsecurity from pg_class where oid = 'public.installation_credentials'::regclass), 'credential RLS active');
 
 
 select * from finish();

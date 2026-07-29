@@ -12,6 +12,8 @@ export type SubmissionId = OpaqueId<'SubmissionId'>;
 export type AccountLinkChallengeId = OpaqueId<'AccountLinkChallengeId'>;
 export type AuthenticationSessionId = OpaqueId<'AuthenticationSessionId'>;
 export type EntitlementId = OpaqueId<'EntitlementId'>;
+export type CompletedPlantId = OpaqueId<'CompletedPlantId'>;
+export type PublicationIntentId = OpaqueId<'PublicationIntentId'>;
 
 export type AccountLinkChallengeState = 'pending' | 'claimed' | 'consumed' | 'expired' | 'cancelled';
 export type PublicationSubmissionState = 'pending' | 'accepted' | 'rejected' | 'duplicate';
@@ -36,6 +38,55 @@ export interface AccountLinkChallenge {
   installationId: ExtensionInstallationId;
   state: AccountLinkChallengeState;
   expiresAt: string;
+}
+
+export const PUBLICATION_AUTHORIZATION_CONTRACT_VERSION = 1;
+export const COMPLETED_PLANT_SNAPSHOT_VERSION = 1;
+
+export interface PublicationAuthorizationRequest {
+  publicationIntentId: PublicationIntentId;
+  completedPlantId: CompletedPlantId;
+  localPlantId: LocalPlantId;
+  installationId: ExtensionInstallationId;
+  contractVersion: number;
+  snapshotVersion: number;
+  snapshotDigest?: string;
+}
+
+export type AccountLinkErrorCode =
+  | 'invalid-challenge' | 'expired-challenge' | 'challenge-consumed'
+  | 'authentication-required' | 'profile-incomplete'
+  | 'installation-already-linked' | 'installation-revoked'
+  | 'credential-invalid' | 'credential-expired' | 'unsupported-version'
+  | 'invalid-publication-intent' | 'internal-error';
+
+export interface AccountLinkError {
+  code: AccountLinkErrorCode;
+  message: string;
+  retryable: boolean;
+}
+
+export interface PublicationAuthorizationResult {
+  authorized: true;
+  installationId: ExtensionInstallationId;
+  publicContributor: { id: PublicContributorId; firstName: string; stateCode: string };
+  acceptedContractVersion: number;
+  acceptedSnapshotVersion: number;
+}
+
+const OPAQUE_LOCAL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+
+export function validatePublicationAuthorizationRequest(value: unknown): PublicationAuthorizationRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid publication intent');
+  const input = value as Record<string, unknown>;
+  const allowed = ['publicationIntentId', 'completedPlantId', 'localPlantId', 'installationId', 'contractVersion', 'snapshotVersion', 'snapshotDigest'];
+  if (Object.keys(input).some((key) => !allowed.includes(key))) throw new TypeError('Invalid publication intent');
+  for (const key of ['publicationIntentId', 'completedPlantId', 'localPlantId', 'installationId'] as const) {
+    if (typeof input[key] !== 'string' || !OPAQUE_LOCAL_ID.test(input[key])) throw new TypeError(`Invalid ${key}`);
+  }
+  if (!Number.isInteger(input.contractVersion) || !Number.isInteger(input.snapshotVersion)) throw new TypeError('Invalid version');
+  if (input.snapshotDigest !== undefined && (typeof input.snapshotDigest !== 'string' || !/^[a-f0-9]{64}$/i.test(input.snapshotDigest))) throw new TypeError('Invalid snapshot digest');
+  return input as unknown as PublicationAuthorizationRequest;
 }
 
 /** Client intent only. The server derives account, ownership, entitlement, and biome. */

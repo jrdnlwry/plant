@@ -43,3 +43,13 @@ test('migration protects ownership and derives account identity from auth.uid()'
   assert.ok(sql.includes("account_profiles_first_name_characters check (first_name is null or first_name ~ '^[[:alpha:] .''-]+$')"));
   assert.doesNotMatch(sql, /latitude|longitude|garden_plant|extension_link/i);
 });
+
+test('extension linking migration hashes secrets and closes direct table access', () => {
+  const sql = readFileSync(new URL('../../../supabase/migrations/20260729000000_extension_account_linking.sql', import.meta.url), 'utf8');
+  for (const table of ['extension_installations', 'account_link_challenges', 'installation_credentials']) assert.match(sql, new RegExp(`alter table public\\.${table} enable row level security`));
+  assert.match(sql, /token_hash text unique not null/);
+  assert.match(sql, /credential_hash text unique not null/);
+  assert.match(sql, /for update/);
+  assert.match(sql, /auth\.uid\(\)/);
+  assert.doesNotMatch(sql, /garden_plants|garden_plots|biome/i);
+});

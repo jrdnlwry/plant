@@ -1,4 +1,5 @@
 importScripts('/src/generated/plantRenderer.global.js', '/src/sharedPlantState.js');
+importScripts('/src/background/accountLink.js');
 const US_STATE_ABBREVIATIONS = {
   AL: 'Alabama',
   AK: 'Alaska',
@@ -238,6 +239,10 @@ async function initializePlant({ plantType, location }) {
 }
 
 function handleLifecycleMessage(message) {
+  if (message.type === 'PLANT_GET_ACCOUNT_LINK_STATUS') return globalThis.PlantAccountLink.get().then((accountLink) => ({ accountLink }));
+  if (message.type === 'PLANT_BEGIN_ACCOUNT_LINK') return globalThis.PlantAccountLink.begin().then((accountLink) => ({ accountLink }));
+  if (message.type === 'PLANT_REFRESH_ACCOUNT_LINK') return globalThis.PlantAccountLink.refresh().then((accountLink) => ({ accountLink }));
+  if (message.type === 'PLANT_CLEAR_ACCOUNT_LINK') return globalThis.PlantAccountLink.clear().then((accountLink) => ({ accountLink }));
   if (message.type === 'PLANT_REQUEST_LIFECYCLE_UPDATE') {
     const key = message.force ? 'refresh:force' : 'refresh:normal';
     return enqueueLifecycleMutation(key, () => refreshStoredPlant({ force: Boolean(message.force) }));
