@@ -1,4 +1,4 @@
-export const SUPPORTED_STATE_CODES = ['AZ', 'CA', 'CO', 'FL', 'GA', 'IL', 'MA', 'MI', 'NC', 'NY', 'OH', 'OR', 'PA', 'TX', 'VA', 'WA'] as const;
+export const SUPPORTED_STATE_CODES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'] as const;
 export const MAX_FIRST_NAME_LENGTH = 50;
 
 export type ProfileInput = { firstName: string | null; stateCode: string | null };

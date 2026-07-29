@@ -14,6 +14,55 @@ export type AuthenticationSessionId = OpaqueId<'AuthenticationSessionId'>;
 export type EntitlementId = OpaqueId<'EntitlementId'>;
 export type CompletedPlantId = OpaqueId<'CompletedPlantId'>;
 export type PublicationIntentId = OpaqueId<'PublicationIntentId'>;
+export type GardenId = OpaqueId<'GardenId'>;
+export type GardenPlotId = OpaqueId<'GardenPlotId'>;
+export type PublicationReceiptId = OpaqueId<'PublicationReceiptId'>;
+
+export type GardenBiome = 'south' | 'north' | 'west' | 'central';
+export const GARDEN_PUBLICATION_CONTRACT_VERSION = 1;
+export const GARDEN_RENDERER_SNAPSHOT_VERSION = 1;
+
+export interface GardenPublicationRequest {
+  publicationIntentId: PublicationIntentId;
+  completedPlantId: CompletedPlantId;
+  sourceLocalPlantId: LocalPlantId;
+  installationId: ExtensionInstallationId;
+  contractVersion: number;
+  snapshotVersion: number;
+  completedPlant: {
+    plantType: string;
+    visualSeed: string;
+    createdAt: string;
+    maturedAt: string;
+    completedAt: string;
+    finalState: PlantStateSnapshot & { plantId?: string };
+  };
+}
+
+export interface GardenPublicationResult {
+  receiptId: PublicationReceiptId;
+  publicationIntentId: PublicationIntentId;
+  completedPlantId: CompletedPlantId;
+  gardenPlantId: GardenPlantId;
+  biome: GardenBiome;
+  gardenNumber: number;
+  plotId: GardenPlotId;
+  row: number;
+  column: number;
+  publicGardenPath: string;
+  createdAt: string;
+  idempotentReplay: boolean;
+}
+
+export type GardenPublicationErrorCode = 'authentication-required' | 'credential-invalid'
+  | 'credential-expired' | 'installation-not-linked' | 'installation-revoked'
+  | 'profile-incomplete' | 'public-contributor-missing' | 'unsupported-region'
+  | 'unsupported-contract-version' | 'unsupported-snapshot-version'
+  | 'invalid-publication-intent' | 'invalid-completed-plant' | 'plant-not-mature'
+  | 'snapshot-too-large' | 'idempotency-conflict' | 'garden-capacity-conflict'
+  | 'plot-assignment-failed' | 'internal-error';
+
+export interface GardenPublicationError { code: GardenPublicationErrorCode; message: string; retryable: boolean }
 
 export type AccountLinkChallengeState = 'pending' | 'claimed' | 'consumed' | 'expired' | 'cancelled';
 export type PublicationSubmissionState = 'pending' | 'accepted' | 'rejected' | 'duplicate';

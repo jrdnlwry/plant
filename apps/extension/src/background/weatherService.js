@@ -1,5 +1,6 @@
 importScripts('/src/generated/plantRenderer.global.js', '/src/sharedPlantState.js');
 importScripts('/src/background/accountLink.js');
+importScripts('/src/background/publicationSubmission.js');
 const US_STATE_ABBREVIATIONS = {
   AL: 'Alabama',
   AK: 'Alaska',
@@ -239,6 +240,8 @@ async function initializePlant({ plantType, location }) {
 }
 
 function handleLifecycleMessage(message) {
+  if (message.type === 'PLANT_GET_PUBLICATION_STATUS') return globalThis.PlantPublicationSubmission.status().then((publication) => ({ publication }));
+  if (message.type === 'PLANT_SUBMIT_PUBLICATION_INTENT' || message.type === 'PLANT_RETRY_PUBLICATION_INTENT') return enqueueLifecycleMutation(`publication:${message.publicationIntentId || 'pending'}`, () => globalThis.PlantPublicationSubmission.submit(message.publicationIntentId).then((publication) => ({ publication })));
   if (message.type === 'PLANT_GET_ACCOUNT_LINK_STATUS') return globalThis.PlantAccountLink.get().then((accountLink) => ({ accountLink }));
   if (message.type === 'PLANT_BEGIN_ACCOUNT_LINK') return globalThis.PlantAccountLink.begin().then((accountLink) => ({ accountLink }));
   if (message.type === 'PLANT_REFRESH_ACCOUNT_LINK') return globalThis.PlantAccountLink.refresh().then((accountLink) => ({ accountLink }));
