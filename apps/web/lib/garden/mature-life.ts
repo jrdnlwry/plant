@@ -88,5 +88,6 @@ export function catchUpMatureLife(state: MatureLifeState, throughDate: string, c
 
 /** Renderer adapter preserves the immutable snapshot and its adult extension stage. */
 export function matureRenderSnapshot(snapshot: PlantStateSnapshot, life: MatureLifeState): PlantStateSnapshot {
-  return { ...snapshot, growthStage: 4, growthProgress: 100, totalGrowth: Math.min(400, life.structuralGrowth), health: life.health, hydration: life.hydration, flowerCount: life.flowerCount };
+  const totalGrowth = clamp(life.structuralGrowth, 300, 400);
+  return { ...snapshot, growthStage: 4, growthProgress: totalGrowth - 300, totalGrowth, health: life.health, hydration: life.hydration, flowerCount: life.flowerCount };
 }
