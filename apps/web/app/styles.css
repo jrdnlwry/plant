@@ -122,8 +122,8 @@ button { cursor: pointer; font-weight: 700; background: #315b2d; color: white; }
 .garden-scroll { overflow: auto; height: min(72vh, 760px); min-height: 34rem; border: 5px solid #526c45; border-radius: 1rem; background: #789b58; outline-offset: 3px; box-shadow: inset 0 0 0 2px #9ab277, 0 12px 32px rgba(42,62,37,.2); scrollbar-color: #76553b #b7c99a; }
 .garden-world { position: relative; isolation: isolate; overflow: hidden; }
 .south-environment { position: absolute; z-index: 0; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-.garden-plant-anchor { position: absolute; z-index: 2; width: 80px; height: 80px; transform: translate(-50%, -58%); }
-.garden-plant-anchor::after { content: ''; position: absolute; z-index: -1; left: 18px; right: 18px; bottom: 7px; height: 12px; border-radius: 50%; background: rgba(45,31,22,.25); }
+.garden-plant-anchor { position: absolute; z-index: 2; width: 88px; height: 88px; transform: translate(-50%, -55%); }
+.garden-plant-anchor::after { content: ''; position: absolute; z-index: -1; left: 13px; right: 13px; bottom: 14px; height: 20px; border: 4px solid #573b2c; border-radius: 46% 54% 42% 58%; background: #795238; box-shadow: inset 0 5px #936846, -7px 2px 0 #668647, 7px 3px 0 #668647; }
 .garden-plant-anchor.selected::before { content: ''; position: absolute; inset: 4px; border: 3px dashed #fff3a5; border-radius: 50%; filter: drop-shadow(0 1px #4d3a25); }
 .plant-control { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; }
 .plant-control:focus-visible { outline: 4px solid #173f86; outline-offset: 3px; }

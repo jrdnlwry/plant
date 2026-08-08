@@ -83,6 +83,7 @@ test('grid uses the shared renderer, buttons, URL replacement, escape handling, 
   const plant = readFileSync(new URL('../app/garden/garden-plant.tsx', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../app/styles.css', import.meta.url), 'utf8');
   assert.match(plant, /createPlantRenderModel/);
+  assert.doesNotMatch(plant, /model\.pot/);
   assert.match(grid, /<button/);
   assert.match(grid, /onClick=\{\(\) => open/);
   assert.match(grid, /event\.key === 'Escape'/);
@@ -103,6 +104,11 @@ test('South Garden 1 deterministically maps only plantable logical plots into di
     getPlantWorldPosition({ row: 0, column: 1, plotType: 'plantable' }, first!),
     getPlantWorldPosition({ row: 0, column: 0, plotType: 'plantable' }, first!),
   );
+  const anchors = Array.from({ length: 8 }, (_, row) => Array.from({ length: 12 }, (_, column) =>
+    getPlantWorldPosition({ row, column, plotType: column % 4 === 3 ? 'path' : 'plantable' }, first!),
+  )).flat().filter((anchor) => anchor !== null);
+  assert.equal(anchors.length, 72);
+  assert.equal(new Set(anchors.map(({ x, y }) => `${x}:${y}`)).size, 72);
   assert.equal(getPlantWorldPosition({ row: 0, column: 3, plotType: 'path' }, first!), null);
 });
 

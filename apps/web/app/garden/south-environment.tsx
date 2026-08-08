@@ -1,49 +1,64 @@
 import type { GardenEnvironmentTemplate } from '../../lib/garden/environments';
 
 const Tree = ({ x, y, tone = 0 }: { x: number; y: number; tone?: number }) => <g transform={`translate(${x} ${y})`}>
-  <rect x="24" y="48" width="18" height="28" fill="#705337" />
-  <rect x="8" y="20" width="50" height="38" fill={tone ? '#527a43' : '#416c3d'} />
-  <rect x="18" y="8" width="34" height="40" fill={tone ? '#699052' : '#588548'} />
-  <rect x="4" y="32" width="18" height="16" fill="#345d38" />
-  <rect x="28" y="14" width="9" height="9" fill="#84a85e" />
+  <rect x="27" y="49" width="14" height="28" fill="#61442f" /><rect x="11" y="27" width="50" height="35" fill="#315b3b" />
+  <rect x="19" y="13" width="43" height="39" fill={tone ? '#4f7b45' : '#426f41'} /><rect x="4" y="35" width="28" height="20" fill="#39643d" />
+  <rect x="29" y="9" width="21" height="16" fill={tone ? '#729553' : '#638c4d'} /><rect x="37" y="17" width="8" height="7" fill="#8caf62" />
 </g>;
 
-const Fence = ({ x, y, width }: { x: number; y: number; width: number }) => <g transform={`translate(${x} ${y})`} fill="#9a7048">
-  <rect y="7" width={width} height="8" /><rect y="28" width={width} height="8" />
-  {Array.from({ length: Math.ceil(width / 42) }, (_, index) => <rect key={index} x={index * 42} width="9" height="44" fill="#765238" />)}
+const FlowerClump = ({ x, y, colors = ['#f3cd67', '#e98d77'] }: { x: number; y: number; colors?: string[] }) => <g transform={`translate(${x} ${y})`}>
+  <rect x="8" y="9" width="3" height="16" fill="#3f713e" /><rect x="22" y="5" width="3" height="20" fill="#4c7b43" /><rect x="34" y="12" width="3" height="14" fill="#3f713e" />
+  <rect x="3" y="5" width="11" height="9" fill={colors[0]} /><rect x="18" width="12" height="10" fill={colors[1]} /><rect x="30" y="7" width="12" height="10" fill={colors[0]} />
 </g>;
 
-function PlantingDistrict({ x, y, width, height }: { x: number; y: number; width: number; height: number }) {
-  return <g transform={`translate(${x} ${y})`}>
-    <rect width={width} height={height} rx="42" fill="#789452" />
-    <rect x="20" y="20" width={width - 40} height={height - 40} rx="32" fill="#866044" />
-    {Array.from({ length: 8 }, (_, row) => <g key={row}>
-      <rect x="34" y={42 + row * 102} width={width - 68} height="67" rx="25" fill="#745139" />
-      <path d={`M45 ${71 + row * 102} H${width - 45}`} stroke="#9b7450" strokeWidth="4" strokeDasharray="9 13" />
-    </g>)}
-  </g>;
-}
+const Shrub = ({ x, y }: { x: number; y: number }) => <g transform={`translate(${x} ${y})`}>
+  <rect x="5" y="12" width="45" height="30" fill="#315e3c" /><rect x="13" y="4" width="29" height="33" fill="#4d7c46" />
+  <rect x="20" y="9" width="8" height="7" fill="#76a05a" /><rect x="39" y="23" width="7" height="7" fill="#79a55d" />
+</g>;
+
+const Bed = ({ d, accent = false }: { d: string; accent?: boolean }) => <g>
+  <path d={d} fill="#6d4934" stroke="#4f703f" strokeWidth="18" strokeLinejoin="round" />
+  <path d={d} fill="none" stroke={accent ? '#a97b50' : '#8d6343'} strokeWidth="7" strokeDasharray="7 12" strokeLinejoin="round" />
+</g>;
 
 export function SouthEnvironment({ template }: { template: GardenEnvironmentTemplate }) {
-  const edgeTrees = [...Array.from({ length: 15 }, (_, i) => ({ x: 18 + i * 108, y: 25 + (i % 3) * 7 })), ...Array.from({ length: 14 }, (_, i) => ({ x: 30 + i * 116, y: 1090 + (i % 2) * 8 }))];
+  const edgeTrees = [...Array.from({ length: 15 }, (_, i) => ({ x: 8 + i * 108, y: 18 + (i % 3) * 8 })), ...Array.from({ length: 14 }, (_, i) => ({ x: 24 + i * 116, y: 1105 + (i % 2) * 8 }))];
   return <svg className="south-environment" viewBox={`0 0 ${template.world.width} ${template.world.height}`} aria-hidden="true" focusable="false" shapeRendering="crispEdges">
     <defs>
-      <pattern id="south-grass" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#789b58" /><rect x="5" y="7" width="3" height="7" fill="#668b4d" /><rect x="24" y="22" width="5" height="3" fill="#87a967" /></pattern>
-      <pattern id="south-water" width="28" height="18" patternUnits="userSpaceOnUse"><rect width="28" height="18" fill="#6fa6a0" /><rect x="3" y="5" width="12" height="3" fill="#91beb1" /></pattern>
+      <pattern id="south-grass" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#769955" /><rect x="5" y="7" width="4" height="8" fill="#638548" /><rect x="27" y="29" width="7" height="3" fill="#8cab64" /><rect x="34" y="10" width="3" height="5" fill="#527943" /></pattern>
+      <pattern id="south-path" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="#c6a267" /><rect x="3" y="4" width="6" height="3" fill="#d8b878" /><rect x="17" y="16" width="4" height="3" fill="#aa8556" /></pattern>
+      <pattern id="south-water" width="28" height="18" patternUnits="userSpaceOnUse"><rect width="28" height="18" fill="#5d9694" /><rect x="3" y="5" width="13" height="3" fill="#8fc1ae" /></pattern>
     </defs>
     <rect width="1600" height="1200" fill="url(#south-grass)" />
-    <PlantingDistrict x={170} y={210} width={350} height={875} />
-    <PlantingDistrict x={650} y={220} width={350} height={875} />
-    <PlantingDistrict x={1095} y={195} width={350} height={875} />
-    <path d="M575 0 C548 180 610 290 570 430 S548 720 596 825 S550 1050 580 1200" fill="none" stroke="#b38a5c" strokeWidth="82" />
-    <path d="M0 165 C245 200 430 135 575 185 S940 175 1080 160 S1390 205 1600 158" fill="none" stroke="#b38a5c" strokeWidth="62" />
-    <g transform="translate(610 65)"><rect width="280" height="150" rx="8" fill="#d6d6a7" stroke="#526a4e" strokeWidth="10" /><path d="M25 75 L140 12 255 75" fill="#9fc0a2" stroke="#526a4e" strokeWidth="10" /><rect x="118" y="76" width="50" height="74" fill="#789e86" /><rect x="25" y="82" width="65" height="40" fill="#a9cac0" /><rect x="190" y="82" width="65" height="40" fill="#a9cac0" /><text x="140" y="53" textAnchor="middle" fontSize="20" fontWeight="bold" fill="#3e5944">COMMON HOUSE</text></g>
-    <g transform="translate(72 105)"><rect x="15" y="40" width="150" height="85" fill="#76523d" /><path d="M0 45 L90 0 180 45" fill="#594337" /><rect x="67" y="70" width="48" height="55" fill="#4d382e" /><rect x="128" y="82" width="25" height="28" fill="#9d7650" /><circle cx="28" cy="128" r="22" fill="#75513d" /><circle cx="28" cy="128" r="12" fill="#9d7650" /></g>
-    <g transform="translate(1340 84)"><rect x="12" y="18" width="120" height="70" fill="#79563b" /><rect x="68" y="88" width="8" height="48" fill="#63432f" /><path d="M0 18 H144 L126 0 H18Z" fill="#5e4832" /><text x="72" y="47" textAnchor="middle" fontSize="14" fontWeight="bold" fill="#f0d49c">SOUTH GARDEN</text><text x="72" y="67" textAnchor="middle" fontSize="12" fill="#f0d49c">GROW TOGETHER</text></g>
-    <g transform="translate(90 865)"><ellipse cx="95" cy="86" rx="88" ry="68" fill="#59794f" /><ellipse cx="95" cy="82" rx="72" ry="54" fill="url(#south-water)" /><rect x="178" y="60" width="120" height="14" fill="#795638" /><rect x="190" y="38" width="10" height="62" fill="#60442f" /><rect x="276" y="38" width="10" height="62" fill="#60442f" /></g>
-    <g transform="translate(1260 890)" fill="#76533a"><rect width="145" height="14" /><rect x="14" y="14" width="12" height="45" /><rect x="119" y="14" width="12" height="45" /><rect x="28" y="66" width="42" height="36" fill="#946743" /><rect x="76" y="56" width="52" height="46" fill="#a2764e" /></g>
-    <Fence x={70} y={82} width={470} /><Fence x={1000} y={82} width={320} />
+
+    {/* A single meandering spine connects small garden rooms instead of dividing crop lanes. */}
+    <path d="M760 0 C750 135 690 185 720 290 C760 410 855 430 812 560 C775 675 660 700 720 805 C790 920 850 1030 805 1200" fill="none" stroke="#80633f" strokeWidth="102" />
+    <path d="M760 0 C750 135 690 185 720 290 C760 410 855 430 812 560 C775 675 660 700 720 805 C790 920 850 1030 805 1200" fill="none" stroke="url(#south-path)" strokeWidth="82" />
+    <path d="M710 205 C535 155 375 185 230 150 M815 520 C1000 470 1195 505 1435 425 M700 805 C510 850 340 850 160 945 M790 965 C1015 985 1215 930 1430 1015" fill="none" stroke="#80633f" strokeWidth="60" />
+    <path d="M710 205 C535 155 375 185 230 150 M815 520 C1000 470 1195 505 1435 425 M700 805 C510 850 340 850 160 945 M790 965 C1015 985 1215 930 1430 1015" fill="none" stroke="url(#south-path)" strokeWidth="44" />
+
+    {/* Irregular, mixed beds follow the deterministic anchor districts. */}
+    <Bed d="M145 210 Q235 175 360 210 L480 285 Q500 380 430 445 L255 430 Q145 375 145 210Z" />
+    <Bed d="M125 515 Q230 455 395 490 Q500 550 465 665 Q390 740 245 705 Q120 650 125 515Z" accent />
+    <Bed d="M175 785 Q300 740 455 790 L500 905 Q415 970 260 940 Q165 900 175 785Z" />
+    <Bed d="M620 225 Q710 180 870 225 Q945 300 900 395 Q795 440 655 390 Q590 325 620 225Z" accent />
+    <Bed d="M875 555 Q1010 495 1145 545 Q1200 640 1140 735 Q1000 780 885 710 Q840 635 875 555Z" />
+    <Bed d="M900 800 Q1020 740 1160 795 Q1225 875 1170 965 Q1025 1015 910 945 Q860 875 900 800Z" accent />
+    <Bed d="M1190 190 Q1325 150 1460 220 Q1500 315 1430 390 Q1290 425 1185 355 Q1145 270 1190 190Z" />
+    <Bed d="M1215 500 Q1350 455 1480 535 L1470 700 Q1355 760 1225 690 Q1175 605 1215 500Z" accent />
+    <Bed d="M1230 790 Q1350 745 1480 825 L1455 955 Q1335 1005 1225 935 Q1185 855 1230 790Z" />
+
+    {/* Community landmarks and habitat corners give each part of the map a purpose. */}
+    <g transform="translate(585 45)"><rect x="20" y="45" width="210" height="112" fill="#d7c999" stroke="#4d6948" strokeWidth="9" /><path d="M0 52 L125 0 250 52" fill="#58734e" /><rect x="99" y="94" width="50" height="63" fill="#6f8f79" /><rect x="38" y="79" width="42" height="35" fill="#91b9ae" /><rect x="170" y="79" width="42" height="35" fill="#91b9ae" /></g>
+    <g transform="translate(75 115)"><rect x="14" y="34" width="130" height="76" fill="#76513a" /><path d="M0 36 L78 0 158 36" fill="#504234" /><rect x="58" y="65" width="40" height="45" fill="#49372d" /><rect x="115" y="69" width="20" height="26" fill="#b08a58" /></g>
+    <g transform="translate(1370 92)"><rect x="59" y="67" width="9" height="60" fill="#65462f" /><rect width="130" height="73" fill="#79563b" stroke="#543d2e" strokeWidth="7" /><text x="65" y="30" textAnchor="middle" fontSize="14" fontWeight="bold" fill="#f4d99d">SOUTH GARDEN</text><text x="65" y="52" textAnchor="middle" fontSize="11" fill="#f4d99d">GROW TOGETHER</text></g>
+    <g transform="translate(45 760)"><path d="M10 95 Q20 20 115 10 Q205 20 215 95 Q180 165 105 158 Q25 155 10 95Z" fill="#416f54" /><path d="M30 92 Q40 38 112 30 Q175 35 192 91 Q165 135 108 132 Q50 132 30 92Z" fill="url(#south-water)" /><rect x="27" y="65" width="10" height="30" fill="#4d793e" /><rect x="187" y="74" width="9" height="30" fill="#4d793e" /><rect x="100" y="30" width="18" height="5" fill="#b5d8b0" /></g>
+    <g transform="translate(1260 1020)" fill="#6e4c35"><rect width="145" height="13" /><rect x="14" y="13" width="12" height="43" /><rect x="119" y="13" width="12" height="43" /><rect x="24" y="62" width="43" height="38" fill="#8d613f" /><rect x="74" y="54" width="53" height="46" fill="#a47748" /></g>
+    <g transform="translate(1005 105)"><rect x="10" width="10" height="115" fill="#76523a" /><rect x="105" width="10" height="115" fill="#76523a" /><rect x="5" y="12" width="115" height="8" fill="#9b734a" /><rect x="5" y="54" width="115" height="8" fill="#9b734a" /><rect x="5" y="96" width="115" height="8" fill="#9b734a" /><path d="M18 4 Q45 35 30 105 M108 3 Q75 34 90 108" fill="none" stroke="#3e713f" strokeWidth="8" /></g>
+    <g transform="translate(1040 430)" fill="#714d35"><rect width="135" height="15" /><rect x="10" y="15" width="12" height="38" /><rect x="112" y="15" width="12" height="38" /></g>
+
     {edgeTrees.map((tree, index) => <Tree key={index} {...tree} tone={index % 2} />)}
-    <g fill="#d7c067">{[[560,330],[1045,355],[570,730],[1032,850],[1490,650]].map(([x,y], i) => <g key={i} transform={`translate(${x} ${y})`}><rect x="7" y="5" width="4" height="18" fill="#577342" /><rect width="9" height="9" /><rect x="10" y="2" width="9" height="9" fill="#d99b73" /></g>)}</g>
+    {[{x:55,y:340},{x:510,y:555},{x:1045,y:260},{x:1500,y:570},{x:1135,y:1025}].map((p, i) => <Shrub key={i} {...p} />)}
+    {[{x:90,y:470},{x:510,y:330},{x:1070,y:750},{x:1470,y:310},{x:470,y:1020}].map((p, i) => <FlowerClump key={i} {...p} colors={i % 2 ? ['#e7b9d0','#f0ce64'] : undefined} />)}
   </svg>;
 }
