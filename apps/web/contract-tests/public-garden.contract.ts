@@ -57,6 +57,17 @@ test('public serialization strips weather place name while retaining compatible 
   assert.equal(output.snapshot.weather.temperatureC, weather.temperatureC);
 });
 
+test('legacy garden rows remain readable during mature-life schema rollout', () => {
+  const legacyRow = { ...privatePlantRow } as Record<string, unknown>;
+  for (const column of ['current_mature_stage', 'garden_health', 'garden_hydration', 'structural_growth', 'foliage_density',
+    'garden_flower_count', 'consecutive_unhealthy_days', 'consecutive_favorable_days', 'dormant_since']) delete legacyRow[column];
+  const output = serializePublicPlant(legacyRow, publicContributor);
+  assert.ok(output);
+  assert.equal(output.matureLife.stage, 'active_growth');
+  assert.equal(output.matureLife.health, deterministicPlantStateFixture.health);
+  assert.equal(output.matureLife.hydration, deterministicPlantStateFixture.hydration);
+});
+
 test('public garden preserves all 96 database coordinates and occupancy without returning rows directly', () => {
   const plots = Array.from({ length: 8 }, (_, row) => Array.from({ length: 12 }, (_, column) => ({ id: `plot_${row}_${column}`, row_number: row, column_number: column, plot_type: column % 4 === 3 ? 'path' : 'plantable', reserved_until: 'private' }))).flat();
   const plant = { ...privatePlantRow, plot_id: 'plot_2_4' };
@@ -127,4 +138,6 @@ test('server read boundary selects explicit columns and contains no mutation ope
   assert.doesNotMatch(source, /select\('\*'\)/);
   assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(|\.upsert\(|\.rpc\(/);
   assert.match(source, /\.eq\('status', 'active'\)/);
+  assert.match(source, /error\?\.code === '42703'/);
+  assert.match(source, /legacyPlantColumns/);
 });

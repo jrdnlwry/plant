@@ -1,5 +1,5 @@
 import { isPlantStateSnapshot, isPlantType, type GardenBiome, type PlantStateSnapshot } from '@plant/plant-core';
-import { MATURE_STAGES, matureRenderSnapshot, type MatureLifeState, type MatureStage } from './mature-life.ts';
+import { initialMatureLife, MATURE_STAGES, matureRenderSnapshot, type MatureLifeState, type MatureStage } from './mature-life.ts';
 
 export const PUBLIC_BIOMES = ['south', 'north', 'west', 'central'] as const satisfies readonly GardenBiome[];
 export const PUBLIC_GARDEN_STATUSES = ['open', 'near-capacity', 'closed-to-new-plants', 'full', 'archived'] as const;
@@ -94,15 +94,24 @@ function publicSnapshot(value: unknown): PlantStateSnapshot | null {
 export function serializePublicPlant(row: PlantRow, contributor?: ContributorRow): PublicGardenPlant | null {
   const publicationSnapshot = publicSnapshot(row.canonical_snapshot);
   const stage = row.current_mature_stage;
-  const life: MatureLifeState = {
+  const storedLife: MatureLifeState = {
     stage: stage as MatureStage, health: Number(row.garden_health), hydration: Number(row.garden_hydration),
     structuralGrowth: Number(row.structural_growth), foliageDensity: Number(row.foliage_density),
     flowerCount: Number(row.garden_flower_count), consecutiveUnhealthyDays: Number(row.consecutive_unhealthy_days),
     consecutiveFavorableDays: Number(row.consecutive_favorable_days), dormantSince: typeof row.dormant_since === 'string' ? row.dormant_since : null,
     lastSimulatedDate: String(row.last_simulated_date),
   };
-  const validLife = (MATURE_STAGES as readonly unknown[]).includes(stage)
-    && [life.health, life.hydration, life.structuralGrowth, life.foliageDensity, life.flowerCount].every(Number.isFinite);
+  const hasValidStoredLife = (MATURE_STAGES as readonly unknown[]).includes(stage)
+    && [storedLife.health, storedLife.hydration, storedLife.structuralGrowth, storedLife.foliageDensity, storedLife.flowerCount].every(Number.isFinite);
+  // Older production schemas have the immutable publication snapshot but not the
+  // mature-life columns. Derive the same initial values as the migration backfill
+  // so a partially deployed schema cannot take the public route down.
+  const life = hasValidStoredLife
+    ? storedLife
+    : publicationSnapshot
+      ? initialMatureLife(publicationSnapshot, String(row.last_simulated_date ?? row.added_to_garden_at).slice(0, 10))
+      : storedLife;
+  const validLife = hasValidStoredLife || publicationSnapshot !== null;
   const snapshot = publicationSnapshot && validLife ? matureRenderSnapshot(publicationSnapshot, life) : null;
   if (!isString(row.id) || !isPlantType(row.plant_type) || !isString(row.visual_seed) || !snapshot
     || snapshot.plantType !== row.plant_type || String(snapshot.seed) !== row.visual_seed
