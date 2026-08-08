@@ -7,21 +7,29 @@ export async function getPublicGarden(biome: GardenBiome, gardenNumber: number):
   const admin = createAdminClient();
   const { data: garden, error } = await admin.from('gardens').select('id,biome,garden_number,status,rows,columns')
     .eq('biome', biome).eq('garden_number', gardenNumber).maybeSingle();
-  if (error) throw error;
+  if (error) {
+    console.error('Public garden lookup failed', { biome, gardenNumber, code: error.code });
+    throw error;
+  }
   if (!garden) return null;
   const [{ data: plots, error: plotError }, { data: plants, error: plantError }, { data: numbers, error: numberError }] = await Promise.all([
     admin.from('garden_plots').select('id,row_number,column_number,plot_type').eq('garden_id', garden.id).order('row_number').order('column_number'),
     admin.from('garden_plants').select('id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at').eq('garden_id', garden.id).eq('status', 'active'),
     admin.from('gardens').select('garden_number').eq('biome', biome).order('garden_number'),
   ]);
-  if (plotError) throw plotError;
-  if (plantError) throw plantError;
-  if (numberError) throw numberError;
+  if (plotError || plantError || numberError) {
+    const failure = plotError ?? plantError ?? numberError;
+    console.error('Public garden data lookup failed', { gardenId: garden.id, code: failure?.code });
+    throw failure;
+  }
   const ownerIds = [...new Set((plants ?? []).map((plant) => plant.owner_public_id))];
   const contributorResult = ownerIds.length
     ? await admin.from('public_contributors').select('public_id,display_first_name,state_code,visibility_status').in('public_id', ownerIds)
     : { data: [], error: null };
-  if (contributorResult.error) throw contributorResult.error;
+  if (contributorResult.error) {
+    console.error('Public garden contributor lookup failed', { gardenId: garden.id, code: contributorResult.error.code });
+    throw contributorResult.error;
+  }
   const allNumbers = (numbers ?? []).map((item) => item.garden_number);
   const index = allNumbers.indexOf(gardenNumber);
   return serializePublicGarden(garden, plots ?? [], plants ?? [], contributorResult.data ?? [], {
