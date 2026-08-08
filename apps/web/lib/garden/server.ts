@@ -14,7 +14,7 @@ export async function getPublicGarden(biome: GardenBiome, gardenNumber: number):
   if (!garden) return null;
   const [{ data: plots, error: plotError }, { data: plants, error: plantError }, { data: numbers, error: numberError }] = await Promise.all([
     admin.from('garden_plots').select('id,row_number,column_number,plot_type').eq('garden_id', garden.id).order('row_number').order('column_number'),
-    admin.from('garden_plants').select('id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at').eq('garden_id', garden.id).eq('status', 'active'),
+    admin.from('garden_plants').select('id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at,current_mature_stage,garden_health,garden_hydration,structural_growth,foliage_density,garden_flower_count,consecutive_unhealthy_days,consecutive_favorable_days,dormant_since,last_simulated_date').eq('garden_id', garden.id).eq('status', 'active'),
     admin.from('gardens').select('garden_number').eq('biome', biome).order('garden_number'),
   ]);
   if (plotError || plantError || numberError) {

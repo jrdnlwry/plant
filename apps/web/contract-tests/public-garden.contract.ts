@@ -9,6 +9,9 @@ const privatePlantRow = {
   id: 'gplant_public-safe-123', plot_id: 'plot_1', owner_public_id: 'pc_public-safe-123', plant_type: deterministicPlantStateFixture.plantType,
   visual_seed: String(deterministicPlantStateFixture.seed), canonical_snapshot: { ...deterministicPlantStateFixture, location: '123 Secret Street', weather: deterministicPlantStateFixture.weather ? { ...deterministicPlantStateFixture.weather, placeName: 'Secret Hamlet' } : null },
   status: 'active', added_to_garden_at: '2026-07-01T00:00:00Z', source_created_at: '2026-06-01T00:00:00Z', matured_at: '2026-06-30T00:00:00Z',
+  current_mature_stage: 'active_growth', garden_health: 80, garden_hydration: 70, structural_growth: 400,
+  foliage_density: 80, garden_flower_count: 1, consecutive_unhealthy_days: 0, consecutive_favorable_days: 0,
+  dormant_since: null, last_simulated_date: '2026-07-01',
   account_id: 'private-account', auth_id: 'private-auth', installation_id: 'private-installation', credential_hash: 'private-hash',
   completed_plant_id: 'private-completed', publication_intent_id: 'private-intent', arbitrary_future_private_field: 'private',
 };
@@ -17,7 +20,7 @@ const publicContributor = { public_id: 'pc_public-safe-123', display_first_name:
 test('public plant serialization is an explicit allowlist and removes precise location data', () => {
   const output = serializePublicPlant(privatePlantRow, publicContributor);
   assert.ok(output);
-  assert.deepEqual(Object.keys(output), ['id', 'plantType', 'visualSeed', 'snapshot', 'contributor', 'addedAt', 'createdAt', 'maturedAt']);
+  assert.deepEqual(Object.keys(output), ['id', 'plantType', 'visualSeed', 'snapshot', 'contributor', 'addedAt', 'createdAt', 'maturedAt', 'matureLife']);
   assert.deepEqual(Object.keys(output.contributor), ['id', 'firstName', 'state']);
   assert.equal(output.snapshot.location, '');
   assert.equal(output.snapshot.weather && 'placeName' in output.snapshot.weather, false);

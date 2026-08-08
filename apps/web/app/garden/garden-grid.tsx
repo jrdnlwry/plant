@@ -86,9 +86,9 @@ export function GardenGrid({ garden }: { garden: PublicGarden }) {
         <div><dt>Plant ID</dt><dd>{selected.id}</dd></div>
         {selected.contributor.firstName && <div><dt>Contributor</dt><dd>{selected.contributor.firstName}{selected.contributor.state ? ` · ${stateNames.of(selected.contributor.state)}` : ''}</dd></div>}
         <div><dt>Added</dt><dd>{date(selected.addedAt)}</dd></div><div><dt>Created</dt><dd>{date(selected.createdAt)}</dd></div><div><dt>Matured</dt><dd>{date(selected.maturedAt)}</dd></div>
-        <div><dt>Health</dt><dd>{selected.snapshot.health}%</dd></div><div><dt>Hydration</dt><dd>{selected.snapshot.hydration}%</dd></div>
-        <div><dt>Growth stage</dt><dd>{selected.snapshot.growthStage}</dd></div><div><dt>Growth progress</dt><dd>{selected.snapshot.growthProgress}%</dd></div>
-        <div><dt>Structural growth</dt><dd>{selected.snapshot.totalGrowth}</dd></div><div><dt>Flowers</dt><dd>{selected.snapshot.flowerCount}</dd></div>
+        <div><dt>Mature life</dt><dd>{titleCase(selected.matureLife.stage)}</dd></div><div><dt>Age</dt><dd>{selected.matureLife.gardenAgeInDays} days in garden</dd></div>
+        <div><dt>Health</dt><dd>{selected.matureLife.health}%</dd></div><div><dt>Hydration</dt><dd>{selected.matureLife.hydration}%</dd></div>
+        <div><dt>Structural growth</dt><dd>{selected.matureLife.structuralGrowth}</dd></div><div><dt>Foliage</dt><dd>{selected.matureLife.foliageDensity}%</dd></div><div><dt>Flowers</dt><dd>{selected.matureLife.flowerCount}</dd></div>
         <div><dt>Garden</dt><dd>{titleCase(garden.biome)} {garden.gardenNumber}</dd></div><div><dt>Plot</dt><dd>Row {selectedPlot.row + 1}, column {selectedPlot.column + 1}</dd></div>
       </dl>
     </aside>}

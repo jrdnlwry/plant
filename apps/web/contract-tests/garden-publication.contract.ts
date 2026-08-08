@@ -76,6 +76,9 @@ test('versionless completed extension state persists as a renderable occupied ga
     plant_type: 'fern', visual_seed: '42', canonical_snapshot: persisted, status: 'active',
     added_to_garden_at: '2026-01-03T00:00:00.000Z', source_created_at: request.completedPlant.createdAt,
     matured_at: request.completedPlant.maturedAt,
+    current_mature_stage: 'active_growth', garden_health: 80, garden_hydration: 70, structural_growth: 400,
+    foliage_density: 80, garden_flower_count: 0, consecutive_unhealthy_days: 0, consecutive_favorable_days: 0,
+    dormant_since: null, last_simulated_date: '2026-01-03',
   };
   assert.ok(serializePublicPlant(row));
   const garden = serializePublicGarden(
