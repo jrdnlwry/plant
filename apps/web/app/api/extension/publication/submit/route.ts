@@ -10,6 +10,7 @@ import {
 
 import {
   biomeForState,
+  canonicalPublicationSnapshot,
   PublicationValidationError,
   snapshotDigest,
   validateGardenPublicationRequest,
@@ -60,8 +61,7 @@ export async function POST(request: Request) {
   }
 
   if (
-    input.contractVersion
-    !== GARDEN_PUBLICATION_CONTRACT_VERSION
+    input.contractVersion !== GARDEN_PUBLICATION_CONTRACT_VERSION
   ) {
     return linkError(
       'unsupported-contract-version',
@@ -71,8 +71,7 @@ export async function POST(request: Request) {
   }
 
   if (
-    input.snapshotVersion
-    !== GARDEN_RENDERER_SNAPSHOT_VERSION
+    input.snapshotVersion !== GARDEN_RENDERER_SNAPSHOT_VERSION
   ) {
     return linkError(
       'unsupported-snapshot-version',
@@ -83,6 +82,10 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  /*
+   * Validate the opaque installation credential before doing
+   * any account or publication work.
+   */
   const credentialHash = hashSecret(
     authorization.slice(7),
   );
@@ -118,10 +121,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    Date.parse(credential.expires_at)
-    <= Date.now()
-  ) {
+  if (Date.parse(credential.expires_at) <= Date.now()) {
     return linkError(
       'credential-expired',
       'Installation credential expired.',
@@ -129,10 +129,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    credential.installation_id
-    !== input.installationId
-  ) {
+  if (credential.installation_id !== input.installationId) {
     return linkError(
       'credential-invalid',
       'Credential does not match the installation.',
@@ -140,6 +137,13 @@ export async function POST(request: Request) {
     );
   }
 
+  /*
+   * Load the installation directly.
+   *
+   * Do not use an embedded PostgREST relationship to
+   * account_profiles here. extension_installations.account_id
+   * references auth.users, not account_profiles directly.
+   */
   const {
     data: installation,
     error: installationLookupError,
@@ -183,6 +187,7 @@ export async function POST(request: Request) {
 
   if (
     !installation.account_id
+    || !installation.public_contributor_id
     || !installation.linked_at
   ) {
     return linkError(
@@ -192,6 +197,9 @@ export async function POST(request: Request) {
     );
   }
 
+  /*
+   * Resolve private profile and public contributor separately.
+   */
   const [
     {
       data: profile,
@@ -277,7 +285,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const digest = snapshotDigest(input);
+  /*
+   * Normalize the extension finalState into the canonical
+   * public-garden snapshot before persistence.
+   *
+   * This preserves the incoming fix that adds the shared schema
+   * and renderer versions to legacy/versionless snapshots.
+   */
+  const canonicalSnapshot =
+    canonicalPublicationSnapshot(input);
+
+  const digest = snapshotDigest(
+    input,
+    canonicalSnapshot,
+  );
 
   const {
     data,
@@ -298,8 +319,11 @@ export async function POST(request: Request) {
         input.completedPlant.plantType,
       p_visual_seed:
         input.completedPlant.visualSeed,
+
+      // Persist the normalized snapshot, not the raw finalState.
       p_snapshot:
-        input.completedPlant.finalState,
+        canonicalSnapshot,
+
       p_snapshot_version:
         input.snapshotVersion,
       p_snapshot_digest:
@@ -316,6 +340,20 @@ export async function POST(request: Request) {
       'idempotency-conflict',
       'Publication identity conflicts with an existing publication.',
       409,
+    );
+  }
+
+  if (data?.error) {
+    console.error(
+      'publish_completed_plant returned an application error:',
+      data.error,
+    );
+
+    return linkError(
+      'internal-error',
+      'Publication could not be completed.',
+      500,
+      true,
     );
   }
 
@@ -338,6 +376,23 @@ export async function POST(request: Request) {
         ? 'No eligible garden plot could be assigned.'
         : 'Publication could not be completed.',
       plotFailure ? 409 : 500,
+      true,
+    );
+  }
+
+  /*
+   * Do not report a successful publication unless the RPC
+   * actually returned the persisted garden objects.
+   */
+  if (
+    !data?.gardenPlantId
+    || !data?.plotId
+    || !data?.receiptId
+  ) {
+    return linkError(
+      'internal-error',
+      'Publication could not be completed.',
+      500,
       true,
     );
   }

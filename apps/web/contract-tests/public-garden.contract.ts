@@ -38,6 +38,21 @@ test('declined, removed, malformed, and arbitrary rows cannot become public plan
   assert.equal(serializePublicPlant({ ...privatePlantRow, canonical_snapshot: { arbitrary: true } }, publicContributor), null);
 });
 
+test('public serialization strips weather place name while retaining compatible render state', () => {
+  const weather = {
+    placeName: 'Exact Private Place', temperatureC: 24, humidity: 55, precipitation: 0,
+    weatherCode: 1, windSpeed: 4, isDay: true, recentRain: 0, recentSunHours: 8,
+    fetchedAt: '2026-06-30T00:00:00Z',
+  };
+  const output = serializePublicPlant({
+    ...privatePlantRow,
+    canonical_snapshot: { ...privatePlantRow.canonical_snapshot, weather },
+  }, publicContributor);
+  assert.ok(output?.snapshot.weather);
+  assert.equal('placeName' in output.snapshot.weather, false);
+  assert.equal(output.snapshot.weather.temperatureC, weather.temperatureC);
+});
+
 test('public garden preserves all 96 database coordinates and occupancy without returning rows directly', () => {
   const plots = Array.from({ length: 8 }, (_, row) => Array.from({ length: 12 }, (_, column) => ({ id: `plot_${row}_${column}`, row_number: row, column_number: column, plot_type: column % 4 === 3 ? 'path' : 'plantable', reserved_until: 'private' }))).flat();
   const plant = { ...privatePlantRow, plot_id: 'plot_2_4' };
