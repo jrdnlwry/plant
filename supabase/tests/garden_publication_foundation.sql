@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(24);
 select has_table('public', 'gardens');
 select has_table('public', 'garden_plots');
 select has_table('public', 'garden_plants');
@@ -18,5 +18,11 @@ select row_security_is('public', 'garden_plants', true);
 select row_security_is('public', 'plant_publication_receipts', true);
 select table_privs_are('public', 'gardens', 'anon', array[]::text[]);
 select table_privs_are('public', 'garden_plants', 'authenticated', array[]::text[]);
+select has_table_privilege('service_role', 'public.gardens', 'SELECT');
+select has_table_privilege('service_role', 'public.garden_plots', 'SELECT');
+select has_table_privilege('service_role', 'public.garden_plants', 'SELECT');
+select has_table_privilege('service_role', 'public.public_contributors', 'SELECT');
+select has_table_privilege('service_role', 'public.plant_publication_receipts', 'SELECT');
+select has_function_privilege('service_role', 'public.publish_completed_plant(uuid,text,public.garden_biome,text,text,text,text,text,jsonb,integer,text,timestamptz,timestamptz)', 'EXECUTE');
 select * from finish();
 rollback;

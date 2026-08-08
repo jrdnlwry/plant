@@ -1,5 +1,14 @@
 import { createHash } from 'node:crypto';
-import { isPlantType, type GardenBiome, type GardenPublicationRequest } from '@plant/plant-core';
+import {
+  isPlantStateSnapshot,
+  isPlantType,
+  normalizePlantStateSnapshot,
+  PLANT_STATE_SCHEMA_VERSION,
+  rendererVersion,
+  type GardenBiome,
+  type GardenPublicationRequest,
+  type PlantStateSnapshot,
+} from '@plant/plant-core';
 
 const STATE_BIOMES = {
   south: ['AL', 'AR', 'DE', 'FL', 'GA', 'KY', 'LA', 'MD', 'MS', 'NC', 'SC', 'TN', 'TX', 'VA', 'WV', 'DC'],
@@ -58,7 +67,7 @@ export function validateGardenPublicationRequest(value: unknown, contentLength?:
   const snapshot = record.finalState as Record<string, unknown>;
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) || containsProhibited(snapshot)) throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot contains prohibited or invalid data.');
   if (snapshot.plantId !== input.sourceLocalPlantId || snapshot.plantType !== record.plantType || String(snapshot.seed) !== record.visualSeed) throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot identity does not match the request.');
-  if ((snapshot.schemaVersion !== undefined && snapshot.schemaVersion !== 1) || (snapshot.rendererVersion !== undefined && snapshot.rendererVersion !== 'l-system-pixel-v2')) throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot renderer contract is invalid.');
+  if ((snapshot.schemaVersion !== undefined && snapshot.schemaVersion !== PLANT_STATE_SCHEMA_VERSION) || (snapshot.rendererVersion !== undefined && snapshot.rendererVersion !== rendererVersion)) throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot renderer contract is invalid.');
   if (typeof snapshot.location !== 'string' || typeof snapshot.weatherMood !== 'string' || typeof snapshot.weatherSummary !== 'string') throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot is missing required render state.');
   for (const key of ['createdAt', 'updatedAt'] as const) if (typeof snapshot[key] !== 'string' || !Number.isFinite(Date.parse(snapshot[key] as string))) throw new PublicationValidationError('invalid-completed-plant', `Invalid snapshot ${key}.`);
   for (const [key, min, max] of [['health', 0, 100], ['hydration', 0, 100], ['growthProgress', 0, 100], ['totalGrowth', 0, 400], ['flowerCount', 0, 5]] as const) if (typeof snapshot[key] !== 'number' || !Number.isFinite(snapshot[key]) || snapshot[key] < min || snapshot[key] > max) throw new PublicationValidationError('invalid-completed-plant', `Invalid snapshot ${key}.`);
@@ -67,4 +76,18 @@ export function validateGardenPublicationRequest(value: unknown, contentLength?:
   return value as GardenPublicationRequest;
 }
 
-export const snapshotDigest = (request: GardenPublicationRequest) => createHash('sha256').update(JSON.stringify(request.completedPlant)).digest('hex');
+/** Convert an accepted legacy extension state into the exact immutable renderer contract stored in the garden. */
+export function canonicalPublicationSnapshot(request: GardenPublicationRequest): PlantStateSnapshot {
+  const snapshot = normalizePlantStateSnapshot(request.completedPlant.finalState, request.completedPlant.maturedAt);
+  if (!isPlantStateSnapshot(snapshot)
+    || snapshot.plantType !== request.completedPlant.plantType
+    || String(snapshot.seed) !== request.completedPlant.visualSeed
+    || snapshot.growthStage !== 4
+    || snapshot.growthProgress < 100) {
+    throw new PublicationValidationError('invalid-completed-plant', 'Completed snapshot could not be normalized to the garden renderer contract.');
+  }
+  return snapshot;
+}
+
+export const snapshotDigest = (request: GardenPublicationRequest, snapshot: PlantStateSnapshot) => createHash('sha256')
+  .update(JSON.stringify({ ...request.completedPlant, finalState: snapshot })).digest('hex');
