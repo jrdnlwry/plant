@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { PublicGarden, PublicGardenPlant } from '../../lib/garden/public';
+import { getGardenEnvironment, getPlantWorldPosition } from '../../lib/garden/environments';
 import { GardenPlant } from './garden-plant';
+import { SouthEnvironment } from './south-environment';
 
 const stateNames = new Intl.DisplayNames(['en'], { type: 'region' });
 const titleCase = (value: string) => value.replace(/(^|-)([a-z])/g, (_, lead, letter) => `${lead}${letter.toUpperCase()}`);
@@ -14,6 +16,7 @@ export function plantAccessibleLabel(plant: PublicGardenPlant, row: number, colu
 }
 
 export function GardenGrid({ garden }: { garden: PublicGarden }) {
+  const environment = getGardenEnvironment(garden.biome, garden.gardenNumber);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -57,15 +60,22 @@ export function GardenGrid({ garden }: { garden: PublicGarden }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
+  if (!environment) return <p className="empty-garden">This biome environment is still being cultivated.</p>;
+
   return <div className={`garden-workspace${selected ? ' has-selection' : ''}`}>
     <p className="sr-only" aria-live="polite">{announcement}</p>
-    <div className="garden-scroll" tabIndex={0} aria-label="Scrollable garden grid">
-      <div className="garden-grid" role="grid" aria-label={`${titleCase(garden.biome)} garden ${garden.gardenNumber}`} style={{ gridTemplateColumns: `repeat(${garden.columns}, 5rem)`, gridTemplateRows: `repeat(${garden.rows}, 5rem)` }}>
-        {garden.plots.map((plot) => <div key={`${plot.row}-${plot.column}`} role="gridcell" className={`garden-cell ${plot.plotType}${plot.plant ? ' occupied' : ''}${selected?.id === plot.plant?.id ? ' selected' : ''}`} style={{ gridRow: plot.row + 1, gridColumn: plot.column + 1 }}>
-          {plot.plant && <button ref={(node) => { if (node) buttonRefs.current.set(plot.plant!.id, node); else buttonRefs.current.delete(plot.plant!.id); }} type="button" className="plant-control" aria-label={plantAccessibleLabel(plot.plant, plot.row, plot.column)} aria-pressed={selected?.id === plot.plant.id} onClick={() => open(plot.plant!)}>
+    <div className="garden-scroll" tabIndex={0} aria-label="Scrollable South community garden map">
+      <div className="garden-world" role="region" aria-label={`${titleCase(garden.biome)} garden ${garden.gardenNumber}`} style={{ width: environment.world.width, height: environment.world.height }}>
+        <SouthEnvironment template={environment} />
+        {garden.plots.map((plot) => {
+          const position = getPlantWorldPosition(plot, environment);
+          if (!plot.plant || !position) return null;
+          return <div key={`${plot.row}-${plot.column}`} className={`garden-plant-anchor${selected?.id === plot.plant.id ? ' selected' : ''}`} style={{ left: position.x, top: position.y }}>
+          <button ref={(node) => { if (node) buttonRefs.current.set(plot.plant!.id, node); else buttonRefs.current.delete(plot.plant!.id); }} type="button" className="plant-control" aria-label={plantAccessibleLabel(plot.plant, plot.row, plot.column)} aria-pressed={selected?.id === plot.plant.id} onClick={() => open(plot.plant!)}>
             <GardenPlant snapshot={plot.plant.snapshot} />
-          </button>}
-        </div>)}
+          </button>
+        </div>;
+        })}
       </div>
     </div>
     {selected && selectedPlot && <aside className="plant-details" role="dialog" aria-modal="false" aria-labelledby="plant-detail-title">

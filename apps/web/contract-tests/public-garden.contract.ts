@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { deterministicPlantStateFixture } from '@plant/plant-renderer/testing';
 import { PUBLIC_BIOMES, serializePublicGarden, serializePublicPlant } from '../lib/garden/public.ts';
+import { getGardenEnvironment, getPlantWorldPosition, SOUTH_GARDEN_TEMPLATE } from '../lib/garden/environments.ts';
 
 const privatePlantRow = {
   id: 'gplant_public-safe-123', plot_id: 'plot_1', owner_public_id: 'pc_public-safe-123', plant_type: deterministicPlantStateFixture.plantType,
@@ -89,7 +90,27 @@ test('grid uses the shared renderer, buttons, URL replacement, escape handling, 
   assert.match(grid, /router\.replace/);
   assert.doesNotMatch(grid, /onDoubleClick|dblclick/);
   assert.match(styles, /prefers-reduced-motion/);
-  assert.match(styles, /overflow-x: auto/);
+  assert.match(styles, /overflow: auto/);
+});
+
+test('South Garden 1 deterministically maps only plantable logical plots into distinct world anchors', () => {
+  const first = getGardenEnvironment('south', 1);
+  assert.equal(first, SOUTH_GARDEN_TEMPLATE);
+  assert.equal(getGardenEnvironment('south', 1), first);
+  assert.equal(getGardenEnvironment('north', 1), null);
+  assert.deepEqual(getPlantWorldPosition({ row: 0, column: 0, plotType: 'plantable' }, first!), { x: 210, y: 250 });
+  assert.notDeepEqual(
+    getPlantWorldPosition({ row: 0, column: 1, plotType: 'plantable' }, first!),
+    getPlantWorldPosition({ row: 0, column: 0, plotType: 'plantable' }, first!),
+  );
+  assert.equal(getPlantWorldPosition({ row: 0, column: 3, plotType: 'path' }, first!), null);
+});
+
+test('presentation mapping does not mutate published plot data', () => {
+  const plot = Object.freeze({ row: 2, column: 4, plotType: 'plantable' as const, occupied: true, plant: Object.freeze({ id: 'plant' }) });
+  const before = JSON.stringify(plot);
+  getPlantWorldPosition(plot, SOUTH_GARDEN_TEMPLATE);
+  assert.equal(JSON.stringify(plot), before);
 });
 
 test('server read boundary selects explicit columns and contains no mutation operations', () => {
