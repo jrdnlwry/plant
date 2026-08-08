@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { isPlantStateSnapshot } from '@plant/plant-core';
 import { deterministicPlantStateFixture as snapshot } from '@plant/plant-renderer/testing';
 import { catchUpMatureLife, initialMatureLife, matureRenderSnapshot, simulateMatureDay, type GardenConditions } from '../lib/garden/mature-life.ts';
 
@@ -17,7 +18,10 @@ test('publication initializes a separate adult state and renderer adapter never 
   const life = initialMatureLife(snapshot, '2026-01-01');
   assert.equal(life.stage, 'active_growth');
   assert.notEqual(life, snapshot);
-  assert.equal(matureRenderSnapshot(snapshot, { ...life, stage: 'stress', structuralGrowth: 300 }).growthStage, 4);
+  const stressedSnapshot = matureRenderSnapshot(snapshot, { ...life, stage: 'stress', structuralGrowth: 300 });
+  assert.equal(stressedSnapshot.growthStage, 4);
+  assert.equal(stressedSnapshot.growthProgress, 0);
+  assert.ok(isPlantStateSnapshot(stressedSnapshot));
 });
 
 test('favorable adult days add bounded structure and foliage and can flourish', () => {
