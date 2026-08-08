@@ -10,20 +10,25 @@ export interface GardenEnvironmentTemplate {
   plotToWorld(row: number, column: number): GardenWorldPosition;
 }
 
-const SOUTH_DISTRICT_X = [210, 690, 1135] as const;
+const SOUTH_ROOM_ANCHORS = [
+  [{ x: 210, y: 250 }, { x: 315, y: 235 }, { x: 415, y: 275 }],
+  [{ x: 675, y: 270 }, { x: 790, y: 245 }, { x: 865, y: 320 }],
+  [{ x: 1240, y: 245 }, { x: 1350, y: 220 }, { x: 1430, y: 285 }],
+] as const;
 
 /** Presentation-only coordinates. Database rows and columns remain authoritative. */
 export const SOUTH_GARDEN_TEMPLATE: GardenEnvironmentTemplate = {
-  id: 'south-community-farm-a',
+  id: 'south-community-garden-a',
   biome: 'south',
   world: { width: 1600, height: 1200 },
   plotToWorld(row, column) {
     const district = Math.floor(column / 4);
     const bedColumn = column % 4;
-    const districtDrift = [0, 18, -12][district] ?? 0;
+    const base = SOUTH_ROOM_ANCHORS[district]?.[Math.min(bedColumn, 2)] ?? SOUTH_ROOM_ANCHORS[0][0];
+    const rowDrift = [0, 18, -10, 24, -16, 12, -6, 20][row] ?? 0;
     return {
-      x: (SOUTH_DISTRICT_X[district] ?? SOUTH_DISTRICT_X[0]) + bedColumn * 104 + (row % 2) * 8,
-      y: 250 + row * 102 + districtDrift + (bedColumn === 1 ? 8 : 0),
+      x: base.x + rowDrift + (row % 3 === 2 ? (bedColumn - 1) * 9 : 0),
+      y: base.y + row * 102 + (bedColumn === 1 ? 10 : bedColumn === 2 ? -5 : 0),
     };
   },
 };
