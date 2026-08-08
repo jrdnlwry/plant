@@ -114,40 +114,58 @@ select table_privs_are(
   array[]::text[]
 );
 
-select has_table_privilege(
-  'service_role',
-  'public.gardens',
-  'SELECT'
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.gardens',
+    'SELECT'
+  ),
+  'service_role can select gardens'
 );
 
-select has_table_privilege(
-  'service_role',
-  'public.garden_plots',
-  'SELECT'
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.garden_plots',
+    'SELECT'
+  ),
+  'service_role can select garden_plots'
 );
 
-select has_table_privilege(
-  'service_role',
-  'public.garden_plants',
-  'SELECT'
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.garden_plants',
+    'SELECT'
+  ),
+  'service_role can select garden_plants'
 );
 
-select has_table_privilege(
-  'service_role',
-  'public.public_contributors',
-  'SELECT'
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.public_contributors',
+    'SELECT'
+  ),
+  'service_role can select public_contributors'
 );
 
-select has_table_privilege(
-  'service_role',
-  'public.plant_publication_receipts',
-  'SELECT'
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.plant_publication_receipts',
+    'SELECT'
+  ),
+  'service_role can select plant_publication_receipts'
 );
 
-select has_function_privilege(
-  'service_role',
-  'public.publish_completed_plant(uuid,text,public.garden_biome,text,text,text,text,text,jsonb,integer,text,timestamptz,timestamptz)',
-  'EXECUTE'
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.publish_completed_plant(uuid,text,public.garden_biome,text,text,text,text,text,jsonb,integer,text,timestamptz,timestamptz)',
+    'EXECUTE'
+  ),
+  'service_role can execute publish_completed_plant'
 );
 
 select * from finish();
