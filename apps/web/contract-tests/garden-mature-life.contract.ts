@@ -62,7 +62,7 @@ test('same-day retry is idempotent and missed days catch up once in date order',
 });
 
 test('migration separates mutable state, preserves snapshot, backfills, and exposes scheduler-only idempotent RPC', () => {
-  const sql = readFileSync(new URL('../../../supabase/migrations/20260809000000_persistent_garden_mature_life.sql', import.meta.url), 'utf8');
+  const sql = readFileSync(new URL('../../../supabase/migrations/20260808010000_persistent_garden_mature_life.sql', import.meta.url), 'utf8');
   assert.match(sql, /current_mature_stage/);
   assert.match(sql, /update public\.garden_plants set/);
   assert.doesNotMatch(sql, /set canonical_snapshot\s*=/);
