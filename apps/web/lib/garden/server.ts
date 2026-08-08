@@ -12,11 +12,20 @@ export async function getPublicGarden(biome: GardenBiome, gardenNumber: number):
     throw error;
   }
   if (!garden) return null;
-  const [{ data: plots, error: plotError }, { data: plants, error: plantError }, { data: numbers, error: numberError }] = await Promise.all([
+  const maturePlantColumns = 'id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at,current_mature_stage,garden_health,garden_hydration,structural_growth,foliage_density,garden_flower_count,consecutive_unhealthy_days,consecutive_favorable_days,dormant_since,last_simulated_date';
+  const legacyPlantColumns = 'id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at,last_simulated_date';
+  const [{ data: plots, error: plotError }, initialPlantResult, { data: numbers, error: numberError }] = await Promise.all([
     admin.from('garden_plots').select('id,row_number,column_number,plot_type').eq('garden_id', garden.id).order('row_number').order('column_number'),
-    admin.from('garden_plants').select('id,plot_id,owner_public_id,plant_type,visual_seed,canonical_snapshot,status,added_to_garden_at,source_created_at,matured_at,current_mature_stage,garden_health,garden_hydration,structural_growth,foliage_density,garden_flower_count,consecutive_unhealthy_days,consecutive_favorable_days,dormant_since,last_simulated_date').eq('garden_id', garden.id).eq('status', 'active'),
+    admin.from('garden_plants').select(maturePlantColumns).eq('garden_id', garden.id).eq('status', 'active'),
     admin.from('gardens').select('garden_number').eq('biome', biome).order('garden_number'),
   ]);
+  // Keep public gardens readable while the forward schema repair below rolls out.
+  // Only the known missing-column failure is retried; every other database error remains visible.
+  const plantResult = initialPlantResult.error?.code === '42703'
+    && initialPlantResult.error.message.includes('garden_plants.current_mature_stage')
+    ? await admin.from('garden_plants').select(legacyPlantColumns).eq('garden_id', garden.id).eq('status', 'active')
+    : initialPlantResult;
+  const { data: plants, error: plantError } = plantResult;
   if (plotError || plantError || numberError) {
     const failure = plotError ?? plantError ?? numberError;
     console.error('Public garden data lookup failed', { gardenId: garden.id, code: failure?.code });

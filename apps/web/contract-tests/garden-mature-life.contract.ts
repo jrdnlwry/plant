@@ -71,6 +71,13 @@ test('migration separates mutable state, preserves snapshot, backfills, and expo
   assert.match(sql, /revoke all on function public\.simulate_garden_mature_day/);
 });
 
+test('forward repair adds missing mature-life columns without resetting existing state', () => {
+  const sql = readFileSync(new URL('../../../supabase/migrations/20260810000000_repair_garden_mature_life_columns.sql', import.meta.url), 'utf8');
+  assert.match(sql, /add column if not exists current_mature_stage/);
+  assert.match(sql, /information_schema\.columns/);
+  assert.match(sql, /if needs_backfill then/);
+});
+
 test('public reads remain mutation-free and extension lifecycle sources are untouched by garden simulation', () => {
   const server = readFileSync(new URL('../lib/garden/server.ts', import.meta.url), 'utf8');
   const extension = readFileSync(new URL('../../../apps/extension/src/sharedPlantState.js', import.meta.url), 'utf8');
