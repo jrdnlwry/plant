@@ -8,6 +8,8 @@ const locationInput = document.getElementById('location');
 const plantPreview = document.getElementById('plant-preview');
 const resetSetup = document.getElementById('reset-setup');
 const refreshWeather = document.getElementById('refresh-weather');
+const waterPlant = document.getElementById('water-plant');
+const wateringFeedback = document.getElementById('watering-feedback');
 const completionPanel = document.getElementById('completion-panel');
 const completionPreview = document.getElementById('completion-preview');
 const addToGarden = document.getElementById('add-to-garden');
@@ -128,7 +130,28 @@ function renderSetup(state) {
   document.getElementById('fact-rain').textContent = formatRainDetails(state.weather);
   document.getElementById('fact-weather-updated').textContent = formatWeatherTime(state.weatherUpdatedAt);
   document.getElementById('fact-flowers').textContent = String(Math.round(state.flowerCount));
+  const wateredToday = state.lastManuallyWateredDate === window.PlantCompanionState.toLocalCalendarDate();
+  waterPlant.disabled = wateredToday;
+  waterPlant.textContent = wateredToday ? 'Watered today' : 'Water plant';
+  if (wateredToday && !wateringFeedback.textContent) wateringFeedback.textContent = 'Available again tomorrow.';
 }
+
+waterPlant.addEventListener('click', async () => {
+  waterPlant.disabled = true;
+  const requestId = globalThis.crypto.randomUUID();
+  try {
+    const response = await requestLifecycleMutation({ type: 'PLANT_MANUALLY_WATER', requestId });
+    const result = response.watering;
+    renderSetup(result.state);
+    wateringFeedback.textContent = result.status === 'watered' || result.status === 'already-applied'
+      ? `You watered your plant. Hydration +${result.hydrationGain}%.`
+      : 'Watered today. Available again tomorrow.';
+    await renderStoredPlantOnActiveTab();
+  } catch (error) {
+    wateringFeedback.textContent = error.message || 'Could not water your plant.';
+    waterPlant.disabled = false;
+  }
+});
 
 async function renderCompletionDecision(state) {
   const response = await requestLifecycleMutation({ type: 'PLANT_REQUEST_COMPLETION_STATUS' });
