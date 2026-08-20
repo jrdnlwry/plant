@@ -137,6 +137,89 @@ test('normalizes older or incomplete saved state safely', async () => {
   assert.equal(storage.ambientPlantState.seed, 0);
 });
 
+test('manual watering is eligible once per local calendar date and persists across reloads', async () => {
+  const fixture = loadPlantStateApi();
+  const { api, storage } = fixture;
+  await api.savePlantState(baseState(api, { hydration: 50 }));
+  let rolls = 0;
+  const first = await api.manuallyWaterPlant(
+    { requestId: 'click-1', date: '2026-08-20' },
+    { random: () => { rolls += 1; return 10 / 21; } },
+  );
+  assert.equal(first.status, 'watered');
+  assert.equal(first.hydrationGain, 10);
+  assert.equal(first.state.hydration, 60);
+  assert.equal(storage.ambientPlantState.lastManuallyWateredDate, '2026-08-20');
+
+  const sameDay = await api.manuallyWaterPlant(
+    { requestId: 'click-2', date: '2026-08-20' },
+    { random: () => { rolls += 1; return 1; } },
+  );
+  assert.equal(sameDay.status, 'already-watered');
+  assert.equal(rolls, 1, 'ineligible attempts never consume randomness');
+
+  // Re-evaluating the script simulates a popup/browser restart while retaining local storage.
+  const restarted = loadPlantStateApi();
+  restarted.storage.ambientPlantState = JSON.parse(JSON.stringify(storage.ambientPlantState));
+  const afterRestart = await restarted.api.manuallyWaterPlant(
+    { requestId: 'click-3', date: '2026-08-20' },
+    { random: () => { throw new Error('must not reroll'); } },
+  );
+  assert.equal(afterRestart.status, 'already-watered');
+
+  const tomorrow = await restarted.api.manuallyWaterPlant(
+    { requestId: 'click-4', date: '2026-08-21' },
+    { random: () => 0 },
+  );
+  assert.equal(tomorrow.status, 'watered');
+  assert.equal(tomorrow.hydrationGain, 0, 'zero is a valid result');
+});
+
+test('manual watering rolls integer gains from 0 through 20 and clamps hydration', async () => {
+  for (const expected of [0, 1, 10, 20]) {
+    const { api } = loadPlantStateApi();
+    await api.savePlantState(baseState(api, { hydration: 95 }));
+    const result = await api.manuallyWaterPlant(
+      { requestId: `roll-${expected}`, date: '2026-08-20' },
+      { random: () => expected / 21 },
+    );
+    assert.equal(result.hydrationGain, expected);
+    assert.equal(Number.isInteger(result.hydrationGain), true);
+    assert.equal(result.hydrationGain >= 0 && result.hydrationGain <= 20, true);
+    assert.equal(result.state.hydration, Math.min(100, 95 + expected));
+  }
+});
+
+test('manual watering retries are idempotent and consume exactly one roll', async () => {
+  const { api } = loadPlantStateApi();
+  await api.savePlantState(baseState(api, { hydration: 40 }));
+  let rolls = 0;
+  const options = { random: () => { rolls += 1; return 20 / 21; } };
+  const first = await api.manuallyWaterPlant({ requestId: 'stable-request', date: '2026-08-20' }, options);
+  const retry = await api.manuallyWaterPlant({ requestId: 'stable-request', date: '2026-08-20' }, options);
+  assert.equal(first.hydrationGain, 20);
+  assert.equal(retry.status, 'already-applied');
+  assert.equal(retry.hydrationGain, 20);
+  assert.equal(retry.state.hydration, 60);
+  assert.equal(rolls, 1);
+});
+
+test('completed and archived garden-bound plants cannot be manually watered', async () => {
+  const { api } = loadPlantStateApi();
+  const mature = await api.savePlantState(baseState(api, { totalGrowth: 400 }));
+  await assert.rejects(
+    () => api.manuallyWaterPlant({ requestId: 'too-late', date: '2026-08-20' }),
+    /completed plants cannot be watered/,
+  );
+  const completion = await api.completePlantLifecycle({
+    plantId: mature.plantId,
+    expectedRevision: mature.revision,
+    decision: 'accepted',
+  });
+  assert.equal(completion.completedPlant.gardenDecision, 'accepted');
+  assert.equal(typeof api.waterGardenPlant, 'undefined', 'community garden snapshots expose no watering operation');
+});
+
 test('preserves current plant-type and weather-state behavior', () => {
   const { api } = loadPlantStateApi();
   assert.deepEqual(Object.keys(api.PLANT_TYPES), ['fern', 'succulent', 'blossom', 'vine', 'sapling']);

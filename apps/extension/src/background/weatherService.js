@@ -234,7 +234,11 @@ async function refreshStoredPlant(options = {}) {
 }
 
 async function initializePlant({ plantType, location }) {
+  const previous = await globalThis.PlantCompanionState.getStoredPlantState();
   const state = globalThis.PlantCompanionState.createInitialPlantState({ plantType, location });
+  state.lastManuallyWateredDate = previous?.lastManuallyWateredDate || null;
+  state.lastManualWateringRequestId = previous?.lastManualWateringRequestId || null;
+  state.lastManualWateringGain = previous?.lastManualWateringGain ?? null;
   await chrome.storage.local.set({ ambientPlantState: state, ambientPlantPendingCompletion: null });
   return refreshStoredPlant({ force: true });
 }
@@ -252,6 +256,11 @@ function handleLifecycleMessage(message) {
   }
   if (message.type === 'PLANT_INITIALIZE') {
     return enqueueLifecycleMutation(null, () => initializePlant(message));
+  }
+  if (message.type === 'PLANT_MANUALLY_WATER') {
+    return enqueueLifecycleMutation(`watering:${message.requestId || 'invalid'}`, async () => ({
+      watering: await globalThis.PlantCompanionState.manuallyWaterPlant({ requestId: message.requestId }),
+    }));
   }
   if (message.type === 'PLANT_COMPLETE_LIFECYCLE') {
     return enqueueLifecycleMutation(null, async () => ({

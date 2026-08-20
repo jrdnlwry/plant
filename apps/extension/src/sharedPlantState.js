@@ -31,6 +31,9 @@
     weatherUpdatedAt: null,
     processedThrough: null,
     lastWeatherObservationAt: null,
+    lastManuallyWateredDate: null,
+    lastManualWateringRequestId: null,
+    lastManualWateringGain: null,
     revision: 0,
   };
 
@@ -159,7 +162,55 @@
       weatherUpdatedAt: state.weatherUpdatedAt || null,
       processedThrough: state.processedThrough || state.updatedAt || state.createdAt || now,
       lastWeatherObservationAt: state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
+      lastManuallyWateredDate: /^\d{4}-\d{2}-\d{2}$/.test(state.lastManuallyWateredDate || '')
+        ? state.lastManuallyWateredDate
+        : null,
+      lastManualWateringRequestId: typeof state.lastManualWateringRequestId === 'string'
+        ? state.lastManualWateringRequestId
+        : null,
+      lastManualWateringGain: Number.isInteger(state.lastManualWateringGain)
+        ? clamp(state.lastManualWateringGain, 0, 20)
+        : null,
     };
+  }
+
+  function toLocalCalendarDate(now = new Date()) {
+    const date = now instanceof Date ? now : new Date(now);
+    if (!Number.isFinite(date.getTime())) throw new TypeError('Invalid watering date.');
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  async function manuallyWaterPlant(command = {}, options = {}) {
+    const requestId = typeof command.requestId === 'string' ? command.requestId : '';
+    if (!requestId) throw new TypeError('A watering request identity is required.');
+    const date = command.date || toLocalCalendarDate(options.now);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new TypeError('Invalid watering date.');
+
+    const state = await getStoredPlantState();
+    if (!state) throw new Error('There is no active extension plant to water.');
+    if (isPlantLifecycleComplete(state)) throw new Error('Archived or completed plants cannot be watered.');
+    if (state.lastManualWateringRequestId === requestId) {
+      return { status: 'already-applied', hydrationGain: state.lastManualWateringGain, state };
+    }
+    if (state.lastManuallyWateredDate === date) {
+      return { status: 'already-watered', hydrationGain: null, state };
+    }
+
+    // Eligibility is deliberately checked before consuming the one random roll.
+    const random = options.random || Math.random;
+    const hydrationGain = clamp(Math.floor(random() * 21), 0, 20);
+    const nextState = normalizePlantState({
+      ...state,
+      hydration: Math.min(100, state.hydration + hydrationGain),
+      lastManuallyWateredDate: date,
+      lastManualWateringRequestId: requestId,
+      lastManualWateringGain: hydrationGain,
+    });
+    const saved = await savePlantState(nextState, { expectedRevision: state.revision });
+    return { status: 'watered', hydrationGain, state: saved };
   }
 
   function getStoredPlantState() {
@@ -368,6 +419,9 @@
       location: plant.location,
       revision: plant.revision + 1,
     });
+    nextPlant.lastManuallyWateredDate = plant.lastManuallyWateredDate;
+    nextPlant.lastManualWateringRequestId = plant.lastManualWateringRequestId;
+    nextPlant.lastManualWateringGain = plant.lastManualWateringGain;
     // chrome.storage.local.set commits this multi-key record as one storage operation.
     // If it rejects, the mature active plant and its pending marker remain retryable.
     await chrome.storage.local.set({
@@ -576,6 +630,8 @@
     toPublicationAuthorizationRequest,
     completePlantLifecycle,
     getStoredPlantState,
+    manuallyWaterPlant,
+    toLocalCalendarDate,
     savePlantState,
     createInitialPlantState,
     normalizePlantState,
