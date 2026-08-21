@@ -523,6 +523,98 @@ test('processes elapsed time and each weather observation at most once', () => {
   assert.equal(repeated.processedThrough, once.processedThrough);
 });
 
+function intervalWeather(fetchedAt, hourlyMillimeters) {
+  return {
+    ...baseWeather,
+    fetchedAt,
+    precipitation: 0,
+    recentRain: 0,
+    precipitationUnit: 'mm',
+    precipitationSamples: hourlyMillimeters.map(([observedAt, precipitationMm]) => ({ observedAt, precipitationMm })),
+  };
+}
+
+test('converts provider millimeters to inches exactly once', () => {
+  const { api } = loadPlantStateApi();
+  assert.equal(api.millimetersToInches(25.4), 1);
+  assert.equal(Math.abs(api.millimetersToInches(2.286) - 0.09) < Number.EPSILON, true);
+  assert.equal(api.millimetersToInches(-1), 0);
+});
+
+test('no rain in an hourly evaluation interval produces no rain hydration gain', () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-20T12:00:00.000Z';
+  const end = '2026-08-20T18:00:00.000Z';
+  const state = baseState(api, { hydration: 50, createdAt: start, processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start });
+  const weather = intervalWeather(end, [13, 14, 15, 16, 17, 18].map((hour) => [`2026-08-20T${hour}:00:00.000Z`, 0]));
+  const next = api.advancePlantState(state, weather, Date.parse(end));
+  assert.equal(next.lastWeatherPrecipitationMm, 0);
+  assert.equal(next.hydration <= state.hydration, true);
+});
+
+test('light hourly rain is accumulated in millimeters and applied once', () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-20T12:00:00.000Z';
+  const end = '2026-08-20T18:00:00.000Z';
+  const state = baseState(api, { hydration: 40, createdAt: start, processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start });
+  // 0.05 + 0.04 inches = 2.286 mm at the provider boundary.
+  const weather = intervalWeather(end, [0, 0, 1.27, 1.016, 0, 0].map((rain, index) => [`2026-08-20T${13 + index}:00:00.000Z`, rain]));
+  const once = api.advancePlantState(state, weather, Date.parse(end));
+  const retry = api.advancePlantState(once, weather, Date.parse(end));
+  assert.equal(once.lastWeatherPrecipitationMm, 2.286);
+  assert.equal(once.weatherMood, 'rainy');
+  assert.equal(once.hydration > state.hydration, true);
+  assert.equal(retry.hydration, once.hydration);
+});
+
+test('a heavy storm between checks hydrates even when the next current condition is cloudy', () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-20T12:00:00.000Z';
+  const end = '2026-08-20T18:00:00.000Z';
+  const state = baseState(api, { hydration: 30, createdAt: start, processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start });
+  const weather = intervalWeather(end, [["2026-08-20T13:00:00.000Z", 0], ["2026-08-20T14:00:00.000Z", 8], ["2026-08-20T15:00:00.000Z", 9], ["2026-08-20T16:00:00.000Z", 4], ["2026-08-20T17:00:00.000Z", 0], ["2026-08-20T18:00:00.000Z", 0]]);
+  weather.weatherCode = 3;
+  const next = api.advancePlantState(state, weather, Date.parse(end));
+  assert.equal(next.lastWeatherPrecipitationMm, 21);
+  assert.equal(next.weatherMood, 'rainy');
+  assert.equal(next.hydration > state.hydration, true);
+});
+
+test('rain before the evaluation boundary is not applied again', () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-20T12:00:00.000Z';
+  const end = '2026-08-20T18:00:00.000Z';
+  const state = baseState(api, { hydration: 50, createdAt: '2026-08-20T08:00:00.000Z', processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start });
+  const weather = intervalWeather(end, [["2026-08-20T08:00:00.000Z", 20], ["2026-08-20T13:00:00.000Z", 0]]);
+  const next = api.advancePlantState(state, weather, Date.parse(end));
+  assert.equal(next.lastWeatherPrecipitationMm, 0);
+  assert.equal(next.weatherMood, 'steady');
+});
+
+test('rain during missed extension activity is recovered from available hourly data', () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-17T08:00:00.000Z';
+  const end = '2026-08-18T08:00:00.000Z';
+  const state = baseState(api, { hydration: 35, createdAt: start, processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start });
+  const weather = intervalWeather(end, [["2026-08-17T15:00:00.000Z", 14], ["2026-08-18T07:00:00.000Z", 0]]);
+  const next = api.advancePlantState(state, weather, Date.parse(end));
+  assert.equal(next.lastWeatherPrecipitationMm, 14);
+  assert.equal(next.hydration > state.hydration, true);
+});
+
+test('manual watering eligibility remains independent from later interval rain', async () => {
+  const { api } = loadPlantStateApi();
+  const start = '2026-08-20T10:00:00.000Z';
+  await api.savePlantState(baseState(api, { hydration: 20, createdAt: start, processedThrough: start, lastWeatherEvaluationAt: start, lastWeatherObservationAt: start }));
+  const watered = await api.manuallyWaterPlant({ requestId: 'manual-then-rain', date: '2026-08-20' }, { random: () => 0.5 });
+  const end = '2026-08-20T18:00:00.000Z';
+  const weather = intervalWeather(end, [["2026-08-20T15:00:00.000Z", 12]]);
+  const rained = api.advancePlantState(watered.state, weather, Date.parse(end));
+  assert.equal(watered.hydrationGain, 10);
+  assert.equal(rained.lastManuallyWateredDate, '2026-08-20');
+  assert.equal(rained.hydration > watered.state.hydration, true);
+});
+
 test('rejects backward developmental growth for the same plant identity', async () => {
   const { api } = loadPlantStateApi();
   const current = await api.savePlantState(baseState(api, { totalGrowth: 240 }));
@@ -578,6 +670,15 @@ test('popup and overlay delegate active lifecycle mutations to the service worke
   assert.match(worker, /PLANT_GET_COMPLETED_HISTORY/);
   assert.match(worker, /PlantCompanionState\.completePlantLifecycle/);
   assert.doesNotMatch(popup, /PlantCompanionState\.completePlantLifecycle/);
+});
+
+test('weather worker requests UTC hourly millimeter precipitation from the existing provider', () => {
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/background/weatherService.js'), 'utf8');
+  assert.match(worker, /api\.open-meteo\.com\/v1\/forecast/);
+  assert.match(worker, /hourly: 'precipitation'/);
+  assert.match(worker, /timezone: 'UTC'/);
+  assert.match(worker, /precipitationUnit: forecast\.hourly_units\?\.precipitation \|\| 'mm'/);
+  assert.doesNotMatch(worker, /precipitation_unit/);
 });
 
 test('pending publication intent becomes identity-only authorization metadata', () => {
