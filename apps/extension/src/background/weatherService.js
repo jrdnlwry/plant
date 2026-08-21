@@ -106,6 +106,12 @@ function selectMatchingPlace(results, city, state) {
   );
 }
 
+function toUtcIsoTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const timestamp = value.endsWith('Z') ? value : `${value}Z`;
+  return Number.isFinite(Date.parse(timestamp)) ? new Date(timestamp).toISOString() : null;
+}
+
 async function fetchRemoteWeatherForLocation(location) {
   const { city, state } = parseCityState(location);
   const params = new URLSearchParams({
@@ -126,15 +132,22 @@ async function fetchRemoteWeatherForLocation(location) {
     latitude: String(place.latitude),
     longitude: String(place.longitude),
     current: 'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,is_day',
+    hourly: 'precipitation',
     daily: 'precipitation_sum,sunshine_duration',
-    past_days: '3',
+    past_days: '7',
     forecast_days: '1',
-    timezone: 'auto',
+    timezone: 'UTC',
   });
   const forecast = await fetchJson(`https://api.open-meteo.com/v1/forecast?${forecastParams.toString()}`);
   const recentRain = (forecast.daily?.precipitation_sum || []).slice(-4).reduce((sum, value) => sum + Number(value || 0), 0);
   const recentSunHours = (forecast.daily?.sunshine_duration || []).slice(-4).reduce((sum, value) => sum + Number(value || 0) / 3600, 0);
+  const precipitationSamples = (forecast.hourly?.time || []).map((time, index) => ({
+    observedAt: toUtcIsoTimestamp(time),
+    precipitationMm: Math.max(0, Number(forecast.hourly?.precipitation?.[index] || 0)),
+  })).filter((sample) => sample.observedAt);
 
+  const fetchedAt = new Date().toISOString();
+  const precipitationThroughAt = new Date(Math.floor(Date.parse(fetchedAt) / (60 * 60 * 1000)) * 60 * 60 * 1000).toISOString();
   return {
     placeName: [place.name, place.admin1].filter(Boolean).join(', '),
     temperatureC: Number(forecast.current?.temperature_2m ?? 20),
@@ -145,7 +158,10 @@ async function fetchRemoteWeatherForLocation(location) {
     isDay: forecast.current?.is_day !== 0,
     recentRain,
     recentSunHours,
-    fetchedAt: new Date().toISOString(),
+    precipitationSamples,
+    precipitationUnit: forecast.hourly_units?.precipitation || 'mm',
+    precipitationThroughAt,
+    fetchedAt,
   };
 }
 
@@ -230,6 +246,30 @@ async function refreshStoredPlant(options = {}) {
     return { state, updated: false, weatherError };
   }
   const saved = await globalThis.PlantCompanionState.savePlantState(nextState, { expectedRevision: state.revision });
+  if (globalThis.__PLANT_WEATHER_DIAGNOSTICS__) {
+    console.debug('Plant weather evaluation', {
+      plantId: state.plantId,
+      weatherProvider: 'open-meteo',
+      locationSource: 'stored-city-state',
+      lastEvaluationAt: state.lastWeatherEvaluationAt,
+      evaluationStartedAt: new Date(now).toISOString(),
+      evaluationWindowStart: nextState.lastWeatherEvaluationWindowStart,
+      evaluationWindowEnd: nextState.lastWeatherEvaluationAt,
+      weatherFetchedAt: weather?.fetchedAt || null,
+      cacheHit: !needsWeather,
+      precipitationSamples: nextState.lastWeatherPrecipitationSampleCount,
+      rawPrecipitationUnit: weather?.precipitationUnit || null,
+      accumulatedPrecipitation: nextState.lastWeatherPrecipitationMm,
+      precipitationInches: globalThis.PlantCompanionState.millimetersToInches(nextState.lastWeatherPrecipitationMm),
+      interpretedRainLevel: globalThis.PlantCompanionState.getRainIntensity({ intervalPrecipitationMm: nextState.lastWeatherPrecipitationMm }),
+      hydrationBefore: state.hydration,
+      calculatedHydrationDelta: saved.hydration - state.hydration,
+      hydrationAfter: saved.hydration,
+      plantRevisionBefore: state.revision,
+      plantRevisionAfter: saved.revision,
+      persistenceSucceeded: saved.revision !== state.revision,
+    });
+  }
   return { state: saved, updated: saved.revision !== state.revision, weatherError };
 }
 

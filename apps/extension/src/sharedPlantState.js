@@ -31,6 +31,10 @@
     weatherUpdatedAt: null,
     processedThrough: null,
     lastWeatherObservationAt: null,
+    lastWeatherEvaluationAt: null,
+    lastWeatherEvaluationWindowStart: null,
+    lastWeatherPrecipitationMm: 0,
+    lastWeatherPrecipitationSampleCount: 0,
     lastManuallyWateredDate: null,
     lastManualWateringRequestId: null,
     lastManualWateringGain: null,
@@ -162,6 +166,10 @@
       weatherUpdatedAt: state.weatherUpdatedAt || null,
       processedThrough: state.processedThrough || state.updatedAt || state.createdAt || now,
       lastWeatherObservationAt: state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
+      lastWeatherEvaluationAt: state.lastWeatherEvaluationAt || state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
+      lastWeatherEvaluationWindowStart: state.lastWeatherEvaluationWindowStart || null,
+      lastWeatherPrecipitationMm: Math.max(0, Number(state.lastWeatherPrecipitationMm) || 0),
+      lastWeatherPrecipitationSampleCount: Math.max(0, Math.floor(Number(state.lastWeatherPrecipitationSampleCount) || 0)),
       lastManuallyWateredDate: /^\d{4}-\d{2}-\d{2}$/.test(state.lastManuallyWateredDate || '')
         ? state.lastManuallyWateredDate
         : null,
@@ -458,7 +466,31 @@
 
   function getRainfallAmount(weather) {
     if (!weather) return 0;
+    if (Number.isFinite(Number(weather.intervalPrecipitationMm))) {
+      return Math.max(0, Number(weather.intervalPrecipitationMm));
+    }
     return Math.max(Number(weather.recentRain || 0), Number(weather.precipitation || 0));
+  }
+
+  function millimetersToInches(millimeters) {
+    return Math.max(0, Number(millimeters) || 0) / 25.4;
+  }
+
+  function getIntervalPrecipitation(weather, windowStart, windowEnd) {
+    const samples = Array.isArray(weather?.precipitationSamples) ? weather.precipitationSamples : null;
+    if (!samples) return { precipitationMm: getRainfallAmount(weather), sampleCount: 0 };
+    const start = Date.parse(windowStart || 0);
+    const end = Date.parse(windowEnd);
+    const included = samples.filter((sample) => {
+      const observedAt = Date.parse(sample?.observedAt);
+      // Open-Meteo labels an hourly total with the beginning of its hour. A
+      // boundary at 18:00 therefore includes 17:00–18:00, not 18:00–19:00.
+      return Number.isFinite(observedAt) && observedAt >= start && observedAt < end;
+    });
+    return {
+      precipitationMm: included.reduce((sum, sample) => sum + Math.max(0, Number(sample.precipitationMm) || 0), 0),
+      sampleCount: included.length,
+    };
   }
 
   function getRainIntensity(weather) {
@@ -498,15 +530,20 @@
     let mood = 'steady';
     let weatherEffectRatio = 0;
 
+    let weatherEvaluation = null;
     if (weather && isNewWeatherObservation) {
       const previousWeatherTime = Date.parse(state.lastWeatherObservationAt || state.createdAt);
       const elapsedWeatherMs = Math.max(0, Date.parse(observationAt) - previousWeatherTime);
       const elapsedWeatherRatio = state.lastWeatherObservationAt
         ? (elapsedWeatherMs >= WEATHER_EFFECT_MIN_ELAPSED_MS ? clamp(elapsedWeatherMs / WEATHER_REFRESH_MS, 0, 1) : 0) : 1;
       weatherEffectRatio = elapsedWeatherRatio;
-      const rainIntensity = getRainIntensity(weather);
+      const evaluationWindowStart = state.lastWeatherEvaluationAt || state.createdAt;
+      const evaluationWindowEnd = weather.precipitationThroughAt || observationAt;
+      weatherEvaluation = getIntervalPrecipitation(weather, evaluationWindowStart, evaluationWindowEnd);
+      const intervalWeather = { ...weather, intervalPrecipitationMm: weatherEvaluation.precipitationMm };
+      const rainIntensity = getRainIntensity(intervalWeather);
       if (rainIntensity !== 'none') {
-        const rainfall = getRainfallAmount(weather);
+        const rainfall = getRainfallAmount(intervalWeather);
         const rainRatio = clamp((rainfall - LIGHT_RAIN_MM) / (HEAVY_RAIN_MM - LIGHT_RAIN_MM), 0, 1);
         const drynessRatio = clamp((50 - state.hydration) / 50, 0, 1);
         hydrationDelta += (8 + rainRatio * 28 + drynessRatio * rainRatio * 14) * elapsedWeatherRatio;
@@ -562,6 +599,14 @@
         ? new Date(now).toISOString()
         : state.weatherUpdatedAt,
       lastWeatherObservationAt: isNewWeatherObservation ? observationAt : state.lastWeatherObservationAt,
+      lastWeatherEvaluationAt: isNewWeatherObservation
+        ? (weather.precipitationThroughAt || observationAt)
+        : state.lastWeatherEvaluationAt,
+      lastWeatherEvaluationWindowStart: isNewWeatherObservation
+        ? (state.lastWeatherEvaluationAt || state.createdAt)
+        : state.lastWeatherEvaluationWindowStart,
+      lastWeatherPrecipitationMm: weatherEvaluation?.precipitationMm ?? state.lastWeatherPrecipitationMm,
+      lastWeatherPrecipitationSampleCount: weatherEvaluation?.sampleCount ?? state.lastWeatherPrecipitationSampleCount,
       processedThrough: new Date(now).toISOString(),
       updatedAt: new Date(now).toISOString(),
     });
@@ -638,6 +683,8 @@
     shouldRefreshWeather,
     fetchWeatherForLocation,
     getRainfallAmount,
+    getIntervalPrecipitation,
+    millimetersToInches,
     getRainIntensity,
     advancePlantState,
     refreshPlantStateForWeather,
