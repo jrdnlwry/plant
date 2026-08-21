@@ -16,6 +16,10 @@ test('valid fixture creates deterministic render output without mutation', () =>
   assert.equal(JSON.stringify(deterministicPlantStateFixture), before);
   assert.match(renderPlantSvg(deterministicPlantStateFixture), /^<svg/);
 });
+test('plant opacity is 20% bolder without exceeding full opacity', () => {
+  assert.equal(createPlantRenderModel({ ...deterministicPlantStateFixture, health: 0 }).opacity, '0.66');
+  assert.equal(createPlantRenderModel(deterministicPlantStateFixture).opacity, '1.00');
+});
 test('malformed raw snapshot is rejected before rendering', () => { assert.deepEqual(checkRenderCompatibility({ rendererVersion: SUPPORTED_RENDERER_VERSION }), { supported: false, reason: 'invalid-snapshot' }); });
 test('wrong schema version is an invalid snapshot, distinct from renderer incompatibility', () => {
   assert.deepEqual(checkRenderCompatibility({ ...deterministicPlantStateFixture, schemaVersion: PLANT_STATE_SCHEMA_VERSION + 1 }), { supported: false, reason: 'invalid-snapshot' });
