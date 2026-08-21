@@ -339,7 +339,7 @@ function drawPixelLine(pixels, x1, y1, x2, y2, fill, thickness = 1) {
             addPixel(pixels, x + 1, y, fill);
     }
 }
-function deriveGrowthParameters(state) { const preset = plant_core_1.plantTypeDefinitions[state.plantType]; const stage = Math.round(state.growthStage); const healthRatio = state.health / 100; const hydrationRatio = state.hydration / 100; const windSpeed = state.weather?.windSpeed ?? 0; return { stage, lean: windSpeed >= 25 ? (windSpeed >= 40 ? 2 : 1) : 0, droop: Math.round((1 - hydrationRatio) * 3) + (state.weatherMood === 'hot' ? 1 : 0) - (state.weatherMood === 'rainy' ? 1 : 0), stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem, leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf, highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight, outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24', opacity: (0.55 + healthRatio * 0.45).toFixed(2), stepScale: 1.47, iterations: L_SYSTEM_PRESETS[state.plantType]?.iterations || 2 }; }
+function deriveGrowthParameters(state) { const preset = plant_core_1.plantTypeDefinitions[state.plantType]; const stage = Math.round(state.growthStage); const healthRatio = state.health / 100; const hydrationRatio = state.hydration / 100; const windSpeed = state.weather?.windSpeed ?? 0; const weatherDroop = state.weatherMood === 'hot' ? 1 : state.weatherMood === 'rainy' ? -1 : 0; return { stage, lean: windSpeed >= 25 ? (windSpeed >= 40 ? 2 : 1) : 0, droop: Math.max(0, Math.min(4, Math.round((1 - hydrationRatio) * 2 + (1 - healthRatio) * 2) + weatherDroop)), stemFill: healthRatio < 0.35 ? '#777a45' : preset.stem, leafFill: state.weatherMood === 'hot' || hydrationRatio < 0.35 ? '#86a85a' : state.weatherMood === 'rainy' ? '#55c767' : preset.leaf, highlight: state.weatherMood === 'cloudy' ? '#7fae68' : state.weatherMood === 'sunny' ? '#b6e66b' : preset.highlight, outline: healthRatio < 0.35 ? '#4f5133' : '#1f3b24', stepScale: 1.47, iterations: L_SYSTEM_PRESETS[state.plantType]?.iterations || 2 }; }
 function generateLSystem(state, params) {
     const config = L_SYSTEM_PRESETS[state.plantType] || L_SYSTEM_PRESETS.fern;
     const rng = createRng(state.seed);
@@ -375,14 +375,14 @@ function turtlePixelsFromLSystem(state, params) {
         for (const [key, fill] of entries.slice(0, Math.ceil(entries.length * (params.stage / 4))))
             pixels.set(key, fill);
         for (let i = 0; i < state.flowerCount; i++)
-            stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2), params.highlight, params.outline);
+            stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2) + params.droop, params.highlight, params.outline);
         return pixels;
     }
     for (const symbol of sentence.slice(0, 420)) {
         if (symbol === 'F') {
             const rad = turtle.angle * Math.PI / 180;
             const wind = params.lean * (0.15 + rng() * 0.1);
-            const next = { x: Math.round(turtle.x + Math.cos(rad) * stepLength + wind), y: Math.round(turtle.y + Math.sin(rad) * stepLength + Math.max(0, params.droop) * 0.12) };
+            const next = { x: Math.round(turtle.x + Math.cos(rad) * stepLength + wind), y: Math.round(turtle.y + Math.sin(rad) * stepLength + params.droop * 0.35) };
             drawPixelLine(pixels, turtle.x, turtle.y, next.x, next.y, params.outline, turtle.width);
             if (turtle.width > 1)
                 drawPixelLine(pixels, turtle.x + 1, turtle.y, next.x + 1, next.y, params.stemFill);
@@ -416,7 +416,7 @@ function turtlePixelsFromLSystem(state, params) {
     for (const [key, fill] of permanentEntries.slice(0, visibleCount))
         pixels.set(key, fill);
     for (let i = 0; i < state.flowerCount; i++)
-        stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2), params.highlight, params.outline);
+        stampFlower(pixels, 10 + i * 3 + params.lean, 14 - (i % 2) + params.droop, params.highlight, params.outline);
     return pixels;
 }
 function checkRenderCompatibility(value) {
@@ -436,11 +436,11 @@ function createPlantRenderModel(snapshot) {
     const params = deriveGrowthParameters(snapshot);
     const pixels = turtlePixelsFromLSystem(snapshot, params);
     const preset = plant_core_1.plantTypeDefinitions[snapshot.plantType];
-    return { rendererVersion: exports.SUPPORTED_RENDERER_VERSION, viewBox: '0 0 32 32', ariaLabel: `${preset.label} pixel L-system plant companion for ${snapshot.location || 'your location'}: ${snapshot.weatherSummary}`, opacity: params.opacity, pixels: Array.from(pixels.entries()).map(([key, fill]) => { const [x, y] = key.split(',').map(Number); return { x, y, fill }; }), pot: [{ x: 8, y: 21, width: 16, height: 2, fill: params.outline }, { x: 9, y: 23, width: 14, height: 1, fill: params.outline }, { x: 10, y: 24, width: 12, height: 5, fill: params.outline }, { x: 11, y: 29, width: 10, height: 1, fill: params.outline }, { x: 9, y: 21, width: 14, height: 1, fill: '#e0a14a' }, { x: 10, y: 22, width: 12, height: 1, fill: '#b86f35' }, { x: 11, y: 24, width: 10, height: 4, fill: '#b86f35' }, { x: 11, y: 24, width: 3, height: 4, fill: '#e0a14a' }, { x: 18, y: 25, width: 3, height: 3, fill: '#6b3f24' }, { x: 12, y: 29, width: 8, height: 1, fill: '#6b3f24' }] };
+    return { rendererVersion: exports.SUPPORTED_RENDERER_VERSION, viewBox: '0 0 32 32', ariaLabel: `${preset.label} pixel L-system plant companion for ${snapshot.location || 'your location'}: ${snapshot.weatherSummary}`, pixels: Array.from(pixels.entries()).map(([key, fill]) => { const [x, y] = key.split(',').map(Number); return { x, y, fill }; }), pot: [{ x: 8, y: 21, width: 16, height: 2, fill: params.outline }, { x: 9, y: 23, width: 14, height: 1, fill: params.outline }, { x: 10, y: 24, width: 12, height: 5, fill: params.outline }, { x: 11, y: 29, width: 10, height: 1, fill: params.outline }, { x: 9, y: 21, width: 14, height: 1, fill: '#e0a14a' }, { x: 10, y: 22, width: 12, height: 1, fill: '#b86f35' }, { x: 11, y: 24, width: 10, height: 4, fill: '#b86f35' }, { x: 11, y: 24, width: 3, height: 4, fill: '#e0a14a' }, { x: 18, y: 25, width: 3, height: 3, fill: '#6b3f24' }, { x: 12, y: 29, width: 8, height: 1, fill: '#6b3f24' }] };
 }
 function escapeAttribute(value) { return value.replace(/[&"<>]/g, (char) => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[char])); }
 function rect(x, y, width, height, fill, extra = '') { return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" ${extra}/>`; }
-function renderPlantSvg(snapshot) { const model = createPlantRenderModel(snapshot); return `<svg viewBox="${model.viewBox}" role="img" aria-label="${escapeAttribute(model.ariaLabel)}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="opacity:${model.opacity}">${model.pixels.map(p => rect(p.x, p.y, 1, 1, p.fill)).join('')}${model.pot.map(p => rect(p.x, p.y, p.width, p.height, p.fill)).join('')}</svg>`; }
+function renderPlantSvg(snapshot) { const model = createPlantRenderModel(snapshot); return `<svg viewBox="${model.viewBox}" role="img" aria-label="${escapeAttribute(model.ariaLabel)}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">${model.pixels.map(p => rect(p.x, p.y, 1, 1, p.fill)).join('')}${model.pot.map(p => rect(p.x, p.y, p.width, p.height, p.fill)).join('')}</svg>`; }
 
 }
   };

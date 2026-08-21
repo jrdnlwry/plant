@@ -8,7 +8,7 @@ function PlantSvg() {
   }
   const model = createPlantRenderModel(deterministicPlantStateFixture);
   return (
-    <svg viewBox={model.viewBox} role="img" aria-label={model.ariaLabel} xmlns="http://www.w3.org/2000/svg" shapeRendering="crispEdges" style={{ opacity: model.opacity }} className="fixture-plant-svg">
+    <svg viewBox={model.viewBox} role="img" aria-label={model.ariaLabel} xmlns="http://www.w3.org/2000/svg" shapeRendering="crispEdges" className="fixture-plant-svg">
       {model.pixels.map((pixel, index) => <rect key={`plant-${index}`} x={pixel.x} y={pixel.y} width="1" height="1" fill={pixel.fill} />)}
       {model.pot.map((rect, index) => <rect key={`pot-${index}`} x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill={rect.fill} />)}
     </svg>

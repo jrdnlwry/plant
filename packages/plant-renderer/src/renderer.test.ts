@@ -16,6 +16,18 @@ test('valid fixture creates deterministic render output without mutation', () =>
   assert.equal(JSON.stringify(deterministicPlantStateFixture), before);
   assert.match(renderPlantSvg(deterministicPlantStateFixture), /^<svg/);
 });
+test('depleted health and hydration droop the plant without fading it', () => {
+  const condition = { weatherMood: 'cloudy' as const };
+  const healthy = createPlantRenderModel({ ...deterministicPlantStateFixture, ...condition, health: 100, hydration: 100 });
+  const unhealthy = createPlantRenderModel({ ...deterministicPlantStateFixture, ...condition, health: 0, hydration: 100 });
+  const dehydrated = createPlantRenderModel({ ...deterministicPlantStateFixture, ...condition, health: 100, hydration: 0 });
+  const averageY = (model: typeof healthy) => model.pixels.reduce((total, pixel) => total + pixel.y, 0) / model.pixels.length;
+
+  assert.ok(averageY(unhealthy) > averageY(healthy), 'poor health should pull the plant downward');
+  assert.ok(averageY(dehydrated) > averageY(healthy), 'dehydration should pull the plant downward');
+  assert.equal('opacity' in healthy, false);
+  assert.doesNotMatch(renderPlantSvg({ ...deterministicPlantStateFixture, health: 0, hydration: 0 }), /opacity/);
+});
 test('malformed raw snapshot is rejected before rendering', () => { assert.deepEqual(checkRenderCompatibility({ rendererVersion: SUPPORTED_RENDERER_VERSION }), { supported: false, reason: 'invalid-snapshot' }); });
 test('wrong schema version is an invalid snapshot, distinct from renderer incompatibility', () => {
   assert.deepEqual(checkRenderCompatibility({ ...deterministicPlantStateFixture, schemaVersion: PLANT_STATE_SCHEMA_VERSION + 1 }), { supported: false, reason: 'invalid-snapshot' });

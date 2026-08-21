@@ -4,7 +4,7 @@ import type { PlantStateSnapshot } from '@plant/plant-core';
 
 export function GardenPlant({ snapshot }: { snapshot: PlantStateSnapshot }) {
   const model = createPlantRenderModel(snapshot);
-  return <svg viewBox={model.viewBox} aria-hidden="true" focusable="false" shapeRendering="crispEdges" className="garden-plant-svg" style={{ opacity: model.opacity }}>
+  return <svg viewBox={model.viewBox} aria-hidden="true" focusable="false" shapeRendering="crispEdges" className="garden-plant-svg">
     {model.pixels.map((pixel, index) => <rect key={`p${index}`} x={pixel.x} y={pixel.y} width="1" height="1" fill={pixel.fill} />)}
   </svg>;
 }
