@@ -197,7 +197,15 @@
     return `${year}-${month}-${day}`;
   }
 
-  async function manuallyWaterPlant(command = {}, options = {}) {
+  let wateringMutationQueue = Promise.resolve();
+
+  function manuallyWaterPlant(command = {}, options = {}) {
+    const mutation = wateringMutationQueue.catch(() => undefined).then(() => applyManualWatering(command, options));
+    wateringMutationQueue = mutation.catch(() => undefined);
+    return mutation;
+  }
+
+  async function applyManualWatering(command = {}, options = {}) {
     const requestId = typeof command.requestId === 'string' ? command.requestId : '';
     if (!requestId) throw new TypeError('A watering request identity is required.');
     const date = command.date || toLocalCalendarDate(options.now);
@@ -216,15 +224,39 @@
     // Eligibility is deliberately checked before consuming the one random roll.
     const random = options.random || Math.random;
     const hydrationGain = clamp(Math.floor(random() * 21), 0, 20);
-    const nextState = normalizePlantState({
-      ...state,
-      hydration: Math.min(100, state.hydration + hydrationGain),
-      lastManuallyWateredDate: date,
-      lastManualWateringRequestId: requestId,
-      lastManualWateringGain: hydrationGain,
-    });
-    const saved = await savePlantState(nextState, { expectedRevision: state.revision });
-    return { status: 'watered', hydrationGain, state: saved };
+    let baseState = state;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const nextState = normalizePlantState({
+        ...baseState,
+        hydration: Math.min(100, baseState.hydration + hydrationGain),
+        lastManuallyWateredDate: date,
+        lastManualWateringRequestId: requestId,
+        lastManualWateringGain: hydrationGain,
+      });
+      const saveResult = await savePlantState(nextState, { expectedRevision: baseState.revision });
+      if (saveResult.status === 'saved') {
+        return { status: 'watered', hydrationGain, state: saveResult.state };
+      }
+      if (saveResult.status === 'plant-mismatch') {
+        return { status: 'plant-mismatch', hydrationGain: null, state: saveResult.state };
+      }
+      if (saveResult.status === 'persistence-error') {
+        return { status: 'persistence-error', hydrationGain: null, state: saveResult.state, error: saveResult.error };
+      }
+
+      const latest = await getStoredPlantState();
+      if (!latest || latest.plantId !== state.plantId) {
+        return { status: 'plant-mismatch', hydrationGain: null, state: latest };
+      }
+      if (latest.lastManualWateringRequestId === requestId) {
+        return { status: 'already-applied', hydrationGain: latest.lastManualWateringGain, state: latest };
+      }
+      if (latest.lastManuallyWateredDate === date) {
+        return { status: 'already-watered', hydrationGain: null, state: latest };
+      }
+      baseState = latest;
+    }
+    return { status: 'conflict', hydrationGain: null, state: baseState };
   }
 
   function getStoredPlantState() {
@@ -308,10 +340,14 @@
   async function savePlantState(nextState, options = {}) {
     let candidate = normalizePlantState(nextState);
     const storedState = await getStoredPlantState();
-    if (storedState && storedState.plantId !== candidate.plantId) return storedState;
+    if (storedState && storedState.plantId !== candidate.plantId) {
+      return { ...storedState, status: 'plant-mismatch', state: storedState };
+    }
 
     const expectedRevision = options.expectedRevision ?? candidate.revision;
-    if (storedState && storedState.revision !== expectedRevision) return storedState;
+    if (storedState && storedState.revision !== expectedRevision) {
+      return { ...storedState, status: 'revision-conflict', state: storedState };
+    }
     if (storedState && candidate.totalGrowth < storedState.totalGrowth) {
       candidate = normalizePlantState({ ...candidate, totalGrowth: storedState.totalGrowth });
     }
@@ -325,8 +361,12 @@
       updatedAt: options.updatedAt || candidate.updatedAt || new Date().toISOString(),
     });
     if (!isPlantLifecycleComplete(state)) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: state });
-      return state;
+      try {
+        await chrome.storage.local.set({ [STORAGE_KEY]: state });
+        return { ...state, status: 'saved', state };
+      } catch (error) {
+        return { status: 'persistence-error', state: storedState, error: error?.message || 'Unable to save plant state.' };
+      }
     }
     const completionPendingAt = state.completionPendingAt || state.updatedAt;
     state = normalizePlantState({
@@ -342,11 +382,15 @@
           plantId: state.plantId,
           completionPendingAt,
         };
-    await chrome.storage.local.set({
-      [STORAGE_KEY]: state,
-      [COMPLETION_STORAGE_KEY]: completion,
-    });
-    return state;
+    try {
+      await chrome.storage.local.set({
+        [STORAGE_KEY]: state,
+        [COMPLETION_STORAGE_KEY]: completion,
+      });
+      return { ...state, status: 'saved', state };
+    } catch (error) {
+      return { status: 'persistence-error', state: storedState, error: error?.message || 'Unable to save plant state.' };
+    }
   }
 
   function createInitialPlantState({ plantType, location, revision = 0 }) {
@@ -417,8 +461,9 @@
       processedThrough: setupChangedAt,
       updatedAt: setupChangedAt,
     });
-    const saved = await savePlantState(candidate, { expectedRevision: command.expectedRevision });
-    if (saved.plantId !== plant.plantId || saved.revision !== plant.revision + 1 || saved.location !== location) {
+    const saveResult = await savePlantState(candidate, { expectedRevision: command.expectedRevision });
+    const saved = saveResult.state;
+    if (saveResult.status !== 'saved' || saved.plantId !== plant.plantId || saved.revision !== plant.revision + 1 || saved.location !== location) {
       throw new Error('The active plant revision changed while setup was being saved.');
     }
     return saved;
@@ -489,9 +534,6 @@
       location: plant.location,
       revision: plant.revision + 1,
     });
-    nextPlant.lastManuallyWateredDate = plant.lastManuallyWateredDate;
-    nextPlant.lastManualWateringRequestId = plant.lastManualWateringRequestId;
-    nextPlant.lastManualWateringGain = plant.lastManualWateringGain;
     // chrome.storage.local.set commits this multi-key record as one storage operation.
     // If it rejects, the mature active plant and its pending marker remain retryable.
     await chrome.storage.local.set({
@@ -696,7 +738,8 @@
     const needsElapsedUpdate = Date.now() - Date.parse(state.updatedAt || state.createdAt) > 30 * 60 * 1000;
     if (!needsWeather && !needsElapsedUpdate) return state;
     if (needsWeather) weather = await fetchWeatherForLocation(state.location);
-    return savePlantState(advancePlantState(state, weather));
+    const saveResult = await savePlantState(advancePlantState(state, weather), { expectedRevision: state.revision });
+    return saveResult.status === 'saved' ? saveResult.state : saveResult.state || state;
   }
 
   function toRenderablePlantSnapshot(extensionState) {

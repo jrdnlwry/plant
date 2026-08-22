@@ -251,7 +251,8 @@ async function refreshStoredPlant(options = {}) {
   if (nextState === state || (nextState.updatedAt === state.updatedAt && nextState.weather === state.weather)) {
     return { state, updated: false, weatherError };
   }
-  const saved = await globalThis.PlantCompanionState.savePlantState(nextState, { expectedRevision: state.revision });
+  const saveResult = await globalThis.PlantCompanionState.savePlantState(nextState, { expectedRevision: state.revision });
+  const saved = saveResult.state || state;
   if (globalThis.__PLANT_WEATHER_DIAGNOSTICS__) {
     console.debug('Plant weather evaluation', {
       plantId: state.plantId,
@@ -273,10 +274,10 @@ async function refreshStoredPlant(options = {}) {
       hydrationAfter: saved.hydration,
       plantRevisionBefore: state.revision,
       plantRevisionAfter: saved.revision,
-      persistenceSucceeded: saved.revision !== state.revision,
+      persistenceSucceeded: saveResult.status === 'saved',
     });
   }
-  return { state: saved, updated: saved.revision !== state.revision, weatherError };
+  return { state: saved, updated: saveResult.status === 'saved', weatherError };
 }
 
 async function initializePlant({ plantType, location }) {

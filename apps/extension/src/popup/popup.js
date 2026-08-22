@@ -144,9 +144,14 @@ waterPlant.addEventListener('click', async () => {
     const response = await requestLifecycleMutation({ type: 'PLANT_MANUALLY_WATER', requestId });
     const result = response.watering;
     renderSetup(result.state);
-    wateringFeedback.textContent = result.status === 'watered' || result.status === 'already-applied'
-      ? `You watered your plant. Hydration +${result.hydrationGain}%.`
-      : 'Watered today. Available again tomorrow.';
+    if (result.status === 'watered' || result.status === 'already-applied') {
+      wateringFeedback.textContent = `You watered your plant. Hydration +${result.hydrationGain}%.`;
+    } else if (result.status === 'already-watered') {
+      wateringFeedback.textContent = 'Watered today. Available again tomorrow.';
+    } else {
+      wateringFeedback.textContent = 'Plant state changed before watering was saved. Please retry.';
+      waterPlant.disabled = false;
+    }
     await renderStoredPlantOnActiveTab();
   } catch (error) {
     wateringFeedback.textContent = error.message || 'Could not water your plant.';
