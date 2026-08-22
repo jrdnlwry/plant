@@ -144,6 +144,12 @@
     const totalGrowth = clamp(state.totalGrowth ?? legacyTotalGrowth, 0, 400);
     const growthStage = totalGrowth >= 300 ? 4 : Math.floor(totalGrowth / 100) + 1;
     const growthProgress = totalGrowth >= 300 ? totalGrowth - 300 : totalGrowth % 100;
+    const evaluationAt = state.lastWeatherEvaluationAt || state.lastWeatherObservationAt || state.weatherUpdatedAt || null;
+    const evaluationTime = Date.parse(evaluationAt);
+    const createdTime = Date.parse(createdAt);
+    const lastWeatherEvaluationAt = evaluationAt && Number.isFinite(evaluationTime) && evaluationTime >= createdTime
+      ? evaluationAt
+      : (evaluationAt ? createdAt : null);
     return {
       ...DEFAULT_PLANT_STATE,
       ...state,
@@ -166,7 +172,7 @@
       weatherUpdatedAt: state.weatherUpdatedAt || null,
       processedThrough: state.processedThrough || state.updatedAt || state.createdAt || now,
       lastWeatherObservationAt: state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
-      lastWeatherEvaluationAt: state.lastWeatherEvaluationAt || state.lastWeatherObservationAt || state.weatherUpdatedAt || null,
+      lastWeatherEvaluationAt,
       lastWeatherEvaluationWindowStart: state.lastWeatherEvaluationWindowStart || null,
       lastWeatherPrecipitationMm: Math.max(0, Number(state.lastWeatherPrecipitationMm) || 0),
       lastWeatherPrecipitationSampleCount: Math.max(0, Math.floor(Number(state.lastWeatherPrecipitationSampleCount) || 0)),
@@ -308,6 +314,9 @@
     if (storedState && storedState.revision !== expectedRevision) return storedState;
     if (storedState && candidate.totalGrowth < storedState.totalGrowth) {
       candidate = normalizePlantState({ ...candidate, totalGrowth: storedState.totalGrowth });
+    }
+    if (storedState && Date.parse(candidate.lastWeatherEvaluationAt) < Date.parse(storedState.lastWeatherEvaluationAt)) {
+      candidate = normalizePlantState({ ...candidate, lastWeatherEvaluationAt: storedState.lastWeatherEvaluationAt });
     }
 
     let state = normalizePlantState({
@@ -531,15 +540,29 @@
     let weatherEffectRatio = 0;
 
     let weatherEvaluation = null;
+    let committedWeatherEvaluationAt = state.lastWeatherEvaluationAt;
+    let weatherEvaluationWindowStart = state.lastWeatherEvaluationAt || state.createdAt;
     if (weather && isNewWeatherObservation) {
       const previousWeatherTime = Date.parse(state.lastWeatherObservationAt || state.createdAt);
       const elapsedWeatherMs = Math.max(0, Date.parse(observationAt) - previousWeatherTime);
       const elapsedWeatherRatio = state.lastWeatherObservationAt
         ? (elapsedWeatherMs >= WEATHER_EFFECT_MIN_ELAPSED_MS ? clamp(elapsedWeatherMs / WEATHER_REFRESH_MS, 0, 1) : 0) : 1;
       weatherEffectRatio = elapsedWeatherRatio;
-      const evaluationWindowStart = state.lastWeatherEvaluationAt || state.createdAt;
-      const evaluationWindowEnd = weather.precipitationThroughAt || observationAt;
-      weatherEvaluation = getIntervalPrecipitation(weather, evaluationWindowStart, evaluationWindowEnd);
+      const createdTime = Date.parse(state.createdAt);
+      const persistedEvaluationTime = Date.parse(state.lastWeatherEvaluationAt);
+      const evaluationStartTime = Math.max(
+        createdTime,
+        Number.isFinite(persistedEvaluationTime) ? persistedEvaluationTime : createdTime,
+      );
+      const providerBoundary = weather.precipitationThroughAt || observationAt;
+      const providerBoundaryTime = Date.parse(providerBoundary);
+      const committedBoundaryTime = Math.max(
+        evaluationStartTime,
+        Number.isFinite(providerBoundaryTime) ? providerBoundaryTime : evaluationStartTime,
+      );
+      weatherEvaluationWindowStart = new Date(evaluationStartTime).toISOString();
+      committedWeatherEvaluationAt = new Date(committedBoundaryTime).toISOString();
+      weatherEvaluation = getIntervalPrecipitation(weather, weatherEvaluationWindowStart, committedWeatherEvaluationAt);
       const intervalWeather = { ...weather, intervalPrecipitationMm: weatherEvaluation.precipitationMm };
       const rainIntensity = getRainIntensity(intervalWeather);
       if (rainIntensity !== 'none') {
@@ -600,10 +623,10 @@
         : state.weatherUpdatedAt,
       lastWeatherObservationAt: isNewWeatherObservation ? observationAt : state.lastWeatherObservationAt,
       lastWeatherEvaluationAt: isNewWeatherObservation
-        ? (weather.precipitationThroughAt || observationAt)
+        ? committedWeatherEvaluationAt
         : state.lastWeatherEvaluationAt,
       lastWeatherEvaluationWindowStart: isNewWeatherObservation
-        ? (state.lastWeatherEvaluationAt || state.createdAt)
+        ? weatherEvaluationWindowStart
         : state.lastWeatherEvaluationWindowStart,
       lastWeatherPrecipitationMm: weatherEvaluation?.precipitationMm ?? state.lastWeatherPrecipitationMm,
       lastWeatherPrecipitationSampleCount: weatherEvaluation?.sampleCount ?? state.lastWeatherPrecipitationSampleCount,

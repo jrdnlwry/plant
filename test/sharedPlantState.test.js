@@ -534,6 +534,10 @@ function intervalWeather(fetchedAt, hourlyMillimeters) {
   };
 }
 
+function completedIntervalWeather(fetchedAt, precipitationThroughAt, hourlyMillimeters) {
+  return { ...intervalWeather(fetchedAt, hourlyMillimeters), precipitationThroughAt };
+}
+
 test('converts provider millimeters to inches exactly once', () => {
   const { api } = loadPlantStateApi();
   assert.equal(api.millimetersToInches(25.4), 1);
@@ -589,6 +593,110 @@ test('rain before the evaluation boundary is not applied again', () => {
   const next = api.advancePlantState(state, weather, Date.parse(end));
   assert.equal(next.lastWeatherPrecipitationMm, 0);
   assert.equal(next.weatherMood, 'steady');
+});
+
+test('a part-hour plant creation boundary survives two weather refreshes', () => {
+  const { api } = loadPlantStateApi();
+  const createdAt = '2026-08-20T18:30:00.000Z';
+  const state = baseState(api, {
+    hydration: 40,
+    createdAt,
+    updatedAt: createdAt,
+    processedThrough: createdAt,
+    weatherUpdatedAt: null,
+    lastWeatherObservationAt: null,
+    lastWeatherEvaluationAt: null,
+  });
+  const firstWeather = completedIntervalWeather(
+    '2026-08-20T18:40:00.000Z',
+    '2026-08-20T18:00:00.000Z',
+    [['2026-08-20T18:00:00.000Z', 12]],
+  );
+  const first = api.advancePlantState(state, firstWeather, Date.parse(firstWeather.fetchedAt));
+  assert.equal(first.lastWeatherPrecipitationMm, 0);
+  assert.equal(first.lastWeatherEvaluationAt, createdAt);
+
+  const secondWeather = completedIntervalWeather(
+    '2026-08-20T19:05:00.000Z',
+    '2026-08-20T19:00:00.000Z',
+    [['2026-08-20T18:00:00.000Z', 12]],
+  );
+  const second = api.advancePlantState(first, secondWeather, Date.parse(secondWeather.fetchedAt));
+  assert.equal(second.lastWeatherPrecipitationMm, 0);
+  assert.equal(second.lastWeatherPrecipitationSampleCount, 0);
+  assert.equal(second.hydration <= first.hydration, true);
+  assert.equal(second.lastWeatherEvaluationAt, '2026-08-20T19:00:00.000Z');
+});
+
+test('hour-adjacent creation boundaries exclude only samples before creation', () => {
+  const { api } = loadPlantStateApi();
+  const boundary = '2026-08-20T19:00:00.000Z';
+  const sample = [['2026-08-20T18:00:00.000Z', 5]];
+  const weather = completedIntervalWeather('2026-08-20T19:05:00.000Z', boundary, sample);
+  const afterBoundary = '2026-08-20T18:00:00.001Z';
+  const beforeBoundary = '2026-08-20T17:59:59.999Z';
+
+  const after = api.advancePlantState(baseState(api, {
+    createdAt: afterBoundary, processedThrough: afterBoundary, lastWeatherEvaluationAt: null, lastWeatherObservationAt: null,
+  }), weather, Date.parse(weather.fetchedAt));
+  const before = api.advancePlantState(baseState(api, {
+    createdAt: beforeBoundary, processedThrough: beforeBoundary, lastWeatherEvaluationAt: null, lastWeatherObservationAt: null,
+  }), weather, Date.parse(weather.fetchedAt));
+
+  assert.equal(after.lastWeatherPrecipitationMm, 0);
+  assert.equal(before.lastWeatherPrecipitationMm, 5);
+});
+
+test('provider completion boundaries keep the precipitation cursor monotonic', () => {
+  const { api } = loadPlantStateApi();
+  const cursor = '2026-08-20T19:00:00.000Z';
+  const state = baseState(api, {
+    createdAt: '2026-08-20T18:30:00.000Z', processedThrough: cursor,
+    lastWeatherEvaluationAt: cursor, lastWeatherObservationAt: cursor,
+  });
+  const stale = completedIntervalWeather('2026-08-20T19:10:00.000Z', '2026-08-20T18:00:00.000Z', []);
+  const afterStale = api.advancePlantState(state, stale, Date.parse(stale.fetchedAt));
+  assert.equal(afterStale.lastWeatherEvaluationAt, cursor);
+  assert.equal(afterStale.lastWeatherEvaluationWindowStart, cursor);
+
+  const equal = completedIntervalWeather('2026-08-20T19:20:00.000Z', cursor, []);
+  const afterEqual = api.advancePlantState(afterStale, equal, Date.parse(equal.fetchedAt));
+  assert.equal(afterEqual.lastWeatherEvaluationAt, cursor);
+
+  const laterBoundary = '2026-08-20T20:00:00.000Z';
+  const later = completedIntervalWeather('2026-08-20T20:05:00.000Z', laterBoundary, []);
+  const afterLater = api.advancePlantState(afterEqual, later, Date.parse(later.fetchedAt));
+  assert.equal(afterLater.lastWeatherEvaluationAt, laterBoundary);
+  assert.equal(afterLater.lastWeatherEvaluationWindowStart, cursor);
+});
+
+test('normalization and persistence repair or reject backward precipitation cursors', async () => {
+  const { api } = loadPlantStateApi();
+  const createdAt = '2026-08-20T18:30:00.000Z';
+  const normalized = baseState(api, { createdAt, lastWeatherEvaluationAt: '2026-08-20T18:00:00.000Z' });
+  assert.equal(normalized.lastWeatherEvaluationAt, createdAt);
+
+  const cursor = '2026-08-20T20:00:00.000Z';
+  const stored = await api.savePlantState({ ...normalized, lastWeatherEvaluationAt: cursor });
+  const saved = await api.savePlantState(
+    { ...stored, lastWeatherEvaluationAt: '2026-08-20T19:00:00.000Z' },
+    { expectedRevision: stored.revision },
+  );
+  assert.equal(saved.lastWeatherEvaluationAt, cursor);
+});
+
+test('creation immediately before UTC midnight includes only the next hourly sample', () => {
+  const { api } = loadPlantStateApi();
+  const createdAt = '2026-08-20T23:59:59.999Z';
+  const weather = completedIntervalWeather('2026-08-21T01:05:00.000Z', '2026-08-21T01:00:00.000Z', [
+    ['2026-08-20T23:00:00.000Z', 9],
+    ['2026-08-21T00:00:00.000Z', 2],
+  ]);
+  const next = api.advancePlantState(baseState(api, {
+    createdAt, processedThrough: createdAt, lastWeatherEvaluationAt: null, lastWeatherObservationAt: null,
+  }), weather, Date.parse(weather.fetchedAt));
+  assert.equal(next.lastWeatherPrecipitationMm, 2);
+  assert.equal(next.lastWeatherPrecipitationSampleCount, 1);
 });
 
 test('rain during missed extension activity is recovered from available hourly data', () => {
