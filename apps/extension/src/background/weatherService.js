@@ -228,6 +228,7 @@ async function refreshStoredPlant(options = {}) {
   if (!needsWeather && !needsElapsedUpdate) return { state, updated: false };
 
   let weather = state.weather;
+  const weatherLocation = state.location;
   let weatherError = null;
   if (needsWeather) {
     try {
@@ -241,6 +242,11 @@ async function refreshStoredPlant(options = {}) {
   // require the revision at save time, so a restarted worker cannot commit stale data.
   state = await globalThis.PlantCompanionState.getStoredPlantState();
   if (!state) return { state: null, updated: false, weatherError };
+  // Never attach an in-flight response for a previous setup location. The setup
+  // mutation will force a fresh request after it commits.
+  if (needsWeather && state.location !== weatherLocation) {
+    return { state, updated: false, weatherError: null };
+  }
   const nextState = globalThis.PlantCompanionState.advancePlantState(state, weather, now);
   if (nextState === state || (nextState.updatedAt === state.updatedAt && nextState.weather === state.weather)) {
     return { state, updated: false, weatherError };
@@ -274,12 +280,12 @@ async function refreshStoredPlant(options = {}) {
 }
 
 async function initializePlant({ plantType, location }) {
-  const previous = await globalThis.PlantCompanionState.getStoredPlantState();
-  const state = globalThis.PlantCompanionState.createInitialPlantState({ plantType, location });
-  state.lastManuallyWateredDate = previous?.lastManuallyWateredDate || null;
-  state.lastManualWateringRequestId = previous?.lastManualWateringRequestId || null;
-  state.lastManualWateringGain = previous?.lastManualWateringGain ?? null;
-  await chrome.storage.local.set({ ambientPlantState: state, ambientPlantPendingCompletion: null });
+  await globalThis.PlantCompanionState.initializePlantState({ plantType, location });
+  return refreshStoredPlant({ force: true });
+}
+
+async function updatePlantSetup(message) {
+  await globalThis.PlantCompanionState.updatePlantSetup(message);
   return refreshStoredPlant({ force: true });
 }
 
@@ -296,6 +302,9 @@ function handleLifecycleMessage(message) {
   }
   if (message.type === 'PLANT_INITIALIZE') {
     return enqueueLifecycleMutation(null, () => initializePlant(message));
+  }
+  if (message.type === 'PLANT_UPDATE_SETUP') {
+    return enqueueLifecycleMutation(null, () => updatePlantSetup(message));
   }
   if (message.type === 'PLANT_MANUALLY_WATER') {
     return enqueueLifecycleMutation(`watering:${message.requestId || 'invalid'}`, async () => ({
