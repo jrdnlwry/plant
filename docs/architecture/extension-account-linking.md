@@ -56,9 +56,11 @@ sends its snapshot/SVG or owner identity.
 
 ## Operations, manual QA, and remaining risks
 
-Run local Supabase and the website, then load the unpacked extension. The extension currently targets
-`http://localhost:3000`; a release build must inject the deployed HTTPS origin and restrict manifest host
-permissions before distribution.
+Run local Supabase and the website, then load the unpacked extension. The source extension explicitly targets
+`http://localhost:3000` for development. Create a release artifact with
+`EXTENSION_SITE_ORIGIN=https://your-deployed-site.example npm run package:extension`; packaging injects and
+validates the HTTPS origin. The manifest's existing `<all_urls>` host permission covers the configured site;
+narrowing that broad permission remains separate from origin correctness.
 
 1. Sign up/sign in with the existing magic-link page.
 2. On `/account`, or when prompted by linking, save an approved first name and MVP state.

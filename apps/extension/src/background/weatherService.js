@@ -1,4 +1,4 @@
-importScripts('/src/generated/plantRenderer.global.js', '/src/sharedPlantState.js');
+importScripts('/src/config/siteOrigin.js', '/src/generated/plantRenderer.global.js', '/src/sharedPlantState.js');
 importScripts('/src/background/accountLink.js');
 importScripts('/src/background/publicationSubmission.js');
 const US_STATE_ABBREVIATIONS = {

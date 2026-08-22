@@ -1,11 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDir, '..');
-const extensionRoot = path.join(repositoryRoot, 'apps/extension');
+const extensionRoot = path.resolve(repositoryRoot, process.env.EXTENSION_DIR || 'apps/extension');
 const manifestPath = path.join(extensionRoot, 'manifest.json');
 
 function normalizeExtensionPath(extensionPath) {
@@ -57,6 +57,16 @@ function collectManifestFiles(manifest) {
   return files;
 }
 
+async function collectRuntimeFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await collectRuntimeFiles(absolutePath));
+    else files.push(absolutePath);
+  }
+  return files;
+}
+
 async function validateExtension() {
   if (!existsSync(manifestPath)) {
     throw new Error(`Extension manifest is missing: ${path.relative(process.cwd(), manifestPath)}`);
@@ -87,6 +97,16 @@ async function validateExtension() {
   assertFileExists('src/content/injectPlant.js', 'Content script');
   assertFileExists('src/content/overlay.css', 'Content CSS');
 
+  if (process.env.EXTENSION_MODE === 'release') {
+    for (const file of await collectRuntimeFiles(extensionRoot)) {
+      if (!/\.(?:js|json|html|css)$/.test(file)) continue;
+      const contents = await readFile(file, 'utf8');
+      if (/\b(?:localhost|127\.0\.0\.1)\b/i.test(contents)) {
+        throw new Error(`Release extension contains a development host: ${path.relative(extensionRoot, file)}`);
+      }
+    }
+  }
+
   const expectedScripts = [
     'src/generated/plantRenderer.global.js',
     'src/sharedPlantState.js',
@@ -94,7 +114,7 @@ async function validateExtension() {
   ];
   const popupScripts = [...popupHtml.matchAll(/<script\b[^>]*src=['"]([^'"]+)['"][^>]*>/gi)]
     .map((match) => normalizeExtensionPath(match[1]));
-  const popupExpected = expectedScripts.slice(0, 2).concat('src/popup/popup.js');
+  const popupExpected = ['src/config/siteOrigin.js', ...expectedScripts.slice(0, 2), 'src/popup/popup.js'];
   if (JSON.stringify(popupScripts) !== JSON.stringify(popupExpected)) {
     throw new Error(`Popup script order must be: ${popupExpected.join(', ')}`);
   }
@@ -105,8 +125,8 @@ async function validateExtension() {
   }
 
   const background = await readFile(path.join(extensionRoot, manifest.background.service_worker), 'utf8');
-  if (!/^importScripts\(\s*['"]\/src\/generated\/plantRenderer\.global\.js['"]\s*,\s*['"]\/src\/sharedPlantState\.js['"]\s*\);/.test(background)) {
-    throw new Error('Service worker must import the generated renderer before sharedPlantState.js.');
+  if (!/^importScripts\(\s*['"]\/src\/config\/siteOrigin\.js['"]\s*,\s*['"]\/src\/generated\/plantRenderer\.global\.js['"]\s*,\s*['"]\/src\/sharedPlantState\.js['"]\s*\);/.test(background)) {
+    throw new Error('Service worker must import site configuration and the generated renderer before sharedPlantState.js.');
   }
   const generated = await readFile(path.join(extensionRoot, 'src/generated/plantRenderer.global.js'), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(generated)) {
