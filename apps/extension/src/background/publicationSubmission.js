@@ -2,7 +2,6 @@
   const INTENTS_KEY = 'ambientPlantPublicationIntents';
   const ARCHIVE_KEY = 'ambientPlantArchive';
   const CREDENTIAL_KEY = 'ambientPlantInstallationCredential';
-  const API_BASE = 'http://localhost:3000';
 
   async function status() {
     const stored = await chrome.storage.local.get([INTENTS_KEY, ARCHIVE_KEY]);
@@ -34,7 +33,7 @@
         contractVersion: 1, snapshotVersion: 1,
         completedPlant: { plantType: completed.plantType, visualSeed: completed.visualSeed, createdAt: completed.createdAt, maturedAt: completed.maturedAt, completedAt: completed.completedAt, finalState: completed.finalState },
       };
-      const response = await fetch(`${API_BASE}/api/extension/publication/submit`, { method: 'POST', headers: { authorization: `Bearer ${credential.token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const response = await fetch(globalThis.PlantSite.publicationSubmissionUrl(), { method: 'POST', headers: { authorization: `Bearer ${credential.token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) throw Object.assign(new Error(result.error?.message || 'Garden publication failed.'), { publicationError: result.error });
       const required = ['receiptId', 'publicationIntentId', 'completedPlantId', 'gardenPlantId', 'biome', 'gardenNumber', 'plotId', 'row', 'column', 'publicGardenPath', 'createdAt'];

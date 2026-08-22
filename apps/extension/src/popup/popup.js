@@ -185,7 +185,7 @@ async function renderPublicationStatus() {
   submitPublication.textContent = publication.status === 'failed' ? 'Retry submission' : 'Submit to garden';
   submitPublication.dataset.publicationIntentId = publication.publicationIntentId || '';
   publicationPath.hidden = publication.status !== 'submitted';
-  if (publication.receipt?.publicGardenPath) publicationPath.href = `http://localhost:3000${publication.receipt.publicGardenPath}`;
+  if (publication.receipt?.publicGardenPath) publicationPath.href = globalThis.PlantSite.gardenUrl(publication.receipt.publicGardenPath);
 }
 submitPublication.addEventListener('click', async () => {
   submitPublication.disabled = true;

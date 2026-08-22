@@ -125,6 +125,20 @@ Quick start:
    run `npm run supabase:start`, then `npm run supabase:reset`.
 2. Copy `apps/web/.env.example` to `apps/web/.env.local`; use `supabase status` for the local URL and
    anonymous key and set the site URL to `http://localhost:3000`.
+
+### Extension site origin
+
+The unpacked development extension explicitly uses `http://localhost:3000`, configured once in
+`apps/extension/src/config/siteOrigin.js`. Release artifacts must be generated rather than loading the
+source directory directly:
+
+```sh
+EXTENSION_SITE_ORIGIN=https://your-deployed-site.example npm run package:extension
+```
+
+`EXTENSION_SITE_ORIGIN` must be the deployed HTTPS origin (with no path, query, or credentials). The
+command writes `dist/extension`, validates the configured artifact, and fails if configuration is missing,
+invalid, insecure, local, or if any packaged runtime file contains `localhost` or `127.0.0.1`.
 3. Run `npm run dev:web`, visit `/auth/sign-in`, and use the local Mailpit URL reported by the CLI.
 4. Run fast checks with `npm run test:auth`; database assertions are separate (`npm run test:db`) and
    require the local Docker stack.

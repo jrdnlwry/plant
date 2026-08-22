@@ -1,7 +1,6 @@
 (() => {
   const STORAGE_KEY = 'ambientPlantAccountLink';
   const CREDENTIAL_KEY = 'ambientPlantInstallationCredential';
-  const API_BASE = 'http://localhost:3000';
 
   function randomHex(bytes) {
     const values = new Uint8Array(bytes);
@@ -17,7 +16,7 @@
   }
   async function begin() {
     const current = await getState();
-    const response = await fetch(`${API_BASE}/api/extension/link/challenges`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ installationId: current.installationId }) });
+    const response = await fetch(globalThis.PlantSite.accountLinkChallengeUrl(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ installationId: current.installationId }) });
     const result = await response.json();
     if (!response.ok) {
       const failed = { ...current, status: result.error?.code === 'installation-revoked' ? 'revoked' : 'failed', lastCheckedAt: new Date().toISOString() };
@@ -25,13 +24,13 @@
     }
     const state = { installationId: current.installationId, status: 'pending', challengeId: result.challengeId, challengeExpiresAt: result.expiresAt, challengeToken: result.challengeToken };
     await chrome.storage.local.set({ [STORAGE_KEY]: state });
-    await chrome.tabs.create({ url: result.approvalUrl });
+    await chrome.tabs.create({ url: globalThis.PlantSite.accountLinkApprovalUrl(result.challengeToken) });
     return publicState(state);
   }
   async function refresh() {
     const current = await getState();
     if (!current.challengeToken) return publicState(current);
-    const response = await fetch(`${API_BASE}/api/extension/link/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challengeToken: current.challengeToken }) });
+    const response = await fetch(globalThis.PlantSite.accountLinkStatusUrl(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challengeToken: current.challengeToken }) });
     const result = await response.json();
     if (!response.ok) {
       const failed = { ...current, status: result.error?.code === 'installation-revoked' ? 'revoked' : 'failed', lastCheckedAt: new Date().toISOString() };
