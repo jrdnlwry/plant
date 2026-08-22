@@ -789,6 +789,108 @@ test('weather worker requests UTC hourly millimeter precipitation from the exist
   assert.doesNotMatch(worker, /precipitation_unit/);
 });
 
+test('setup location editing preserves the active lifecycle, watering, and archive while advancing revision', async () => {
+  const { api, storage } = loadPlantStateApi();
+  await api.initializePlantState({ plantType: 'blossom', location: 'Raleigh, NC' });
+  let plant = await api.getStoredPlantState();
+  plant = await api.savePlantState({
+    ...plant,
+    totalGrowth: 147.5,
+    hydration: 41,
+    lastManuallyWateredDate: '2026-08-21',
+    lastManualWateringRequestId: 'watering-before-edit',
+    lastManualWateringGain: 13,
+    lifecycleStatus: 'growing',
+    completionPublicationState: 'not-requested',
+  }, { expectedRevision: plant.revision });
+  storage.ambientPlantArchive = [{ plantId: 'previous-plant', finalState: { totalGrowth: 400 } }];
+  const before = JSON.parse(JSON.stringify(plant));
+  const archiveBefore = JSON.parse(JSON.stringify(await api.getPlantArchive()));
+
+  const edited = await api.updatePlantSetup({
+    plantId: plant.plantId,
+    expectedRevision: plant.revision,
+    plantType: plant.plantType,
+    location: 'Durham, NC',
+  });
+
+  for (const field of ['plantId', 'seed', 'createdAt', 'hydration', 'totalGrowth', 'growthStage', 'growthProgress',
+    'lastManuallyWateredDate', 'lastManualWateringRequestId', 'lastManualWateringGain', 'lifecycleStatus',
+    'completionPublicationState']) {
+    assert.equal(edited[field], before[field], `${field} survives setup editing`);
+  }
+  assert.equal(edited.location, 'Durham, NC');
+  assert.equal(edited.revision, before.revision + 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(await api.getPlantArchive())), archiveBefore);
+});
+
+test('duplicate initialization reports a conflict and cannot replace an active plant', async () => {
+  const { api } = loadPlantStateApi();
+  await api.initializePlantState({ plantType: 'fern', location: 'Raleigh, NC' });
+  let active = await api.getStoredPlantState();
+  active = await api.savePlantState({ ...active, totalGrowth: 88, hydration: 37 }, { expectedRevision: active.revision });
+  const before = JSON.parse(JSON.stringify(active));
+
+  await assert.rejects(
+    () => api.initializePlantState({ plantType: 'sapling', location: 'Boone, NC' }),
+    /already initialized/,
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(await api.getStoredPlantState())), before);
+});
+
+test('location editing invalidates old weather and starts precipitation at a monotonic edit boundary', async () => {
+  const { api } = loadPlantStateApi();
+  await api.initializePlantState({ plantType: 'vine', location: 'Raleigh, NC' });
+  let plant = await api.getStoredPlantState();
+  plant = await api.savePlantState({
+    ...plant,
+    hydration: 33,
+    totalGrowth: 125,
+    weather: { ...baseWeather, placeName: 'Raleigh, North Carolina', fetchedAt: '2026-08-21T10:00:00.000Z' },
+    weatherUpdatedAt: '2026-08-21T10:00:00.000Z',
+    lastWeatherObservationAt: '2026-08-21T10:00:00.000Z',
+    lastWeatherEvaluationAt: '2026-08-21T10:00:00.000Z',
+  }, { expectedRevision: plant.revision });
+  const identity = { plantId: plant.plantId, seed: plant.seed, createdAt: plant.createdAt };
+  const oldCursor = plant.lastWeatherEvaluationAt;
+  const edited = await api.updatePlantSetup({ plantId: plant.plantId, expectedRevision: plant.revision, plantType: 'vine', location: 'Durham, NC' });
+  assert.equal(edited.weather, null, 'weather from the old location is discarded');
+  assert.ok(Date.parse(edited.lastWeatherEvaluationAt) >= Date.parse(oldCursor));
+
+  const nextBoundary = new Date(Date.parse(edited.lastWeatherEvaluationAt) + 60 * 60 * 1000).toISOString();
+  const refreshed = api.advancePlantState(edited, {
+    ...baseWeather,
+    placeName: 'Durham, North Carolina',
+    fetchedAt: nextBoundary,
+    precipitationThroughAt: nextBoundary,
+    precipitationSamples: [
+      { observedAt: '2026-08-20T12:00:00.000Z', precipitationMm: 30 },
+      { observedAt: new Date(Date.parse(edited.lastWeatherEvaluationAt) + 30 * 60 * 1000).toISOString(), precipitationMm: 0 },
+    ],
+  }, Date.parse(nextBoundary));
+  assert.equal(refreshed.weather.placeName, 'Durham, North Carolina');
+  assert.equal(refreshed.lastWeatherPrecipitationMm, 0, 'old-location historical rain is outside the new cursor');
+  assert.ok(Date.parse(refreshed.lastWeatherEvaluationAt) >= Date.parse(edited.lastWeatherEvaluationAt));
+  assert.deepEqual({ plantId: refreshed.plantId, seed: refreshed.seed, createdAt: refreshed.createdAt }, identity);
+});
+
+test('setup editing rejects plant-type changes without destructive initialization', async () => {
+  const { api } = loadPlantStateApi();
+  await api.initializePlantState({ plantType: 'fern', location: 'Raleigh, NC' });
+  const plant = await api.getStoredPlantState();
+  await assert.rejects(() => api.updatePlantSetup({
+    plantId: plant.plantId,
+    expectedRevision: plant.revision,
+    plantType: 'sapling',
+    location: 'Durham, NC',
+  }), /Plant type cannot be changed/);
+  assert.equal((await api.getStoredPlantState()).plantType, 'fern');
+
+  const popup = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/popup/popup.js'), 'utf8');
+  assert.match(popup, /PLANT_UPDATE_SETUP/);
+  assert.match(popup, /plantTypeInput\.disabled = true/);
+});
+
 test('pending publication intent becomes identity-only authorization metadata', () => {
   const { api } = loadPlantStateApi();
   const request = api.toPublicationAuthorizationRequest({ state: 'pending', publicationIntentId: 'publication-completed-plant-1234', completedPlantId: 'completed-plant-1234', localPlantId: 'plant-1234', snapshot: { private: 'not sent' } }, `inst_${'a'.repeat(48)}`);

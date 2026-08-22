@@ -24,6 +24,7 @@ const submitPublication = document.getElementById('submit-publication');
 const publicationPath = document.getElementById('publication-path');
 let weatherStatusMessage = '';
 let pendingCompletionCommand = null;
+let setupEditState = null;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function getActiveTab() {
@@ -259,20 +260,27 @@ async function syncToggleFromCurrentTab() {
 
 setupForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const response = await requestLifecycleMutation({
-    type: 'PLANT_INITIALIZE',
-    plantType: plantTypeInput.value,
-    location: locationInput.value,
-  });
-  const refreshedState = response.state;
-  renderSetup(refreshedState);
-  await renderStoredPlantOnActiveTab();
-  if (refreshedState.weather) {
-    setStatus('Plant setup saved with local weather.');
-  } else if (response.weatherError) {
-    setStatus(`Plant setup saved. Weather unavailable: ${response.weatherError}`);
-  } else {
-    setStatus('Plant setup saved. Weather will retry later.');
+  try {
+    const response = await requestLifecycleMutation({
+      type: setupEditState ? 'PLANT_UPDATE_SETUP' : 'PLANT_INITIALIZE',
+      plantType: plantTypeInput.value,
+      location: locationInput.value,
+      ...(setupEditState ? setupEditState : {}),
+    });
+    const refreshedState = response.state;
+    setupEditState = null;
+    plantTypeInput.disabled = false;
+    renderSetup(refreshedState);
+    await renderStoredPlantOnActiveTab();
+    if (refreshedState.weather) {
+      setStatus('Plant setup saved with local weather.');
+    } else if (response.weatherError) {
+      setStatus(`Plant setup saved. Weather unavailable: ${response.weatherError}`);
+    } else {
+      setStatus('Plant setup saved. Weather will retry later.');
+    }
+  } catch (error) {
+    setStatus(error.message || 'Could not save plant setup.');
   }
 });
 
@@ -291,10 +299,12 @@ resetSetup.addEventListener('click', async () => {
   if (currentState) {
     plantTypeInput.value = currentState.plantType;
     locationInput.value = currentState.location;
+    plantTypeInput.disabled = true;
+    setupEditState = { plantId: currentState.plantId, expectedRevision: currentState.revision };
   }
   setupPanel.hidden = false;
   plantPanel.hidden = true;
-  setStatus('Update your setup and save again.');
+  setStatus('Update your location and save. Plant type stays fixed for this lifecycle.');
 });
 
 async function resolveCompletion(decision) {

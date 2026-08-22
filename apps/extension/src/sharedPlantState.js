@@ -371,6 +371,59 @@
     });
   }
 
+  async function initializePlantState({ plantType, location }) {
+    const existing = await getStoredPlantState();
+    if (existing) throw new Error('A plant is already initialized. Update its setup instead.');
+    if (!PLANT_TYPES[plantType]) throw new TypeError('Choose a valid plant type.');
+    const state = createInitialPlantState({ plantType, location });
+    await chrome.storage.local.set({
+      [STORAGE_KEY]: state,
+      [COMPLETION_STORAGE_KEY]: null,
+    });
+    return state;
+  }
+
+  async function updatePlantSetup(command = {}) {
+    const plant = await getStoredPlantState();
+    if (!plant) throw new Error('There is no active plant to update.');
+    if (command.plantId !== plant.plantId) throw new Error('The active plant identity is stale.');
+    if (command.expectedRevision !== plant.revision) throw new Error('The active plant revision is stale.');
+    if (command.plantType !== plant.plantType) {
+      throw new Error('Plant type cannot be changed after a lifecycle has started.');
+    }
+
+    const location = typeof command.location === 'string' ? command.location.trim() : '';
+    if (!location) throw new TypeError('Enter a location.');
+    if (location === plant.location) return plant;
+
+    const setupChangedAt = new Date().toISOString();
+    const previousEvaluationTime = Date.parse(plant.lastWeatherEvaluationAt);
+    const setupChangedTime = Date.parse(setupChangedAt);
+    const nextEvaluationBoundary = Number.isFinite(previousEvaluationTime) && previousEvaluationTime > setupChangedTime
+      ? plant.lastWeatherEvaluationAt
+      : setupChangedAt;
+    // Weather snapshots belong to a location, so discard the old snapshot. Keep
+    // (or advance) the committed evaluation cursor: the new location must never
+    // replay rain from before this edit or move precipitation accounting backwards.
+    const candidate = normalizePlantState({
+      ...plant,
+      location,
+      weather: null,
+      weatherMood: 'starting',
+      weatherSummary: 'Weather will update for the new location.',
+      weatherUpdatedAt: null,
+      lastWeatherObservationAt: null,
+      lastWeatherEvaluationAt: nextEvaluationBoundary,
+      processedThrough: setupChangedAt,
+      updatedAt: setupChangedAt,
+    });
+    const saved = await savePlantState(candidate, { expectedRevision: command.expectedRevision });
+    if (saved.plantId !== plant.plantId || saved.revision !== plant.revision + 1 || saved.location !== location) {
+      throw new Error('The active plant revision changed while setup was being saved.');
+    }
+    return saved;
+  }
+
   async function completePlantLifecycle(command, legacyOptions = {}) {
     const request = typeof command === 'string'
       ? { decision: command === 'community-garden' ? 'accepted' : command === 'private' ? 'declined' : command, ...legacyOptions }
@@ -702,6 +755,8 @@
     toLocalCalendarDate,
     savePlantState,
     createInitialPlantState,
+    initializePlantState,
+    updatePlantSetup,
     normalizePlantState,
     shouldRefreshWeather,
     fetchWeatherForLocation,
