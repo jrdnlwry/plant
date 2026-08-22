@@ -8,7 +8,7 @@ function loadPlantStateApi() {
   const rendererSource = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/generated/plantRenderer.global.js'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '..', 'apps/extension/src/sharedPlantState.js'), 'utf8');
   const storage = {};
-  const storageControl = { failNextSet: false };
+  const storageControl = { failNextSet: false, getCount: 0, beforeGet: null };
   const context = {
     console,
     Date,
@@ -22,6 +22,8 @@ function loadPlantStateApi() {
       storage: {
         local: {
           get: async (key) => {
+            storageControl.getCount += 1;
+            storageControl.beforeGet?.(storageControl.getCount, key, storage);
             if (Array.isArray(key)) return Object.fromEntries(key.map((entry) => [entry, storage[entry]]));
             return { [key]: storage[key] };
           },
@@ -202,6 +204,106 @@ test('manual watering retries are idempotent and consume exactly one roll', asyn
   assert.equal(retry.hydrationGain, 20);
   assert.equal(retry.state.hydration, 60);
   assert.equal(rolls, 1);
+});
+
+test('a completed lifecycle creates a same-day water-eligible plant without inherited watering metadata', async () => {
+  const { api } = loadPlantStateApi();
+  const date = '2026-08-21';
+  await api.savePlantState(baseState(api, { hydration: 50 }));
+  const watered = await api.manuallyWaterPlant({ requestId: 'plant-a-water', date }, { random: () => 0.6 });
+  const mature = (await api.savePlantState({ ...watered.state, totalGrowth: 400 }, {
+    expectedRevision: watered.state.revision,
+  })).state;
+  const completion = await api.completePlantLifecycle({
+    plantId: mature.plantId,
+    expectedRevision: mature.revision,
+    decision: 'declined',
+  });
+
+  assert.equal(completion.nextPlant.lastManuallyWateredDate, null);
+  assert.equal(completion.nextPlant.lastManualWateringRequestId, null);
+  assert.equal(completion.nextPlant.lastManualWateringGain, null);
+  const plantBWatering = await api.manuallyWaterPlant({ requestId: 'plant-b-water', date }, { random: () => 0.5 });
+  assert.equal(plantBWatering.status, 'watered');
+  assert.equal(plantBWatering.hydrationGain, 10);
+});
+
+test('concurrent distinct watering requests commit at most one daily gain', async () => {
+  const { api } = loadPlantStateApi();
+  await api.savePlantState(baseState(api, { hydration: 50 }));
+  const [first, second] = await Promise.all([
+    api.manuallyWaterPlant({ requestId: 'rapid-a', date: '2026-08-21' }, { random: () => 0.5 }),
+    api.manuallyWaterPlant({ requestId: 'rapid-b', date: '2026-08-21' }, { random: () => 0.9 }),
+  ]);
+  assert.deepEqual([first.status, second.status], ['watered', 'already-watered']);
+  assert.equal((await api.getStoredPlantState()).hydration, 60);
+});
+
+test('watering retries once from the latest revision without losing an intervening weather effect', async () => {
+  const { api, storage, storageControl } = loadPlantStateApi();
+  await api.savePlantState(baseState(api, { hydration: 50 }));
+  const before = await api.getStoredPlantState();
+  const triggerGet = storageControl.getCount + 2;
+  storageControl.beforeGet = (count) => {
+    if (count !== triggerGet) return;
+    storage.ambientPlantState = api.normalizePlantState({
+      ...storage.ambientPlantState,
+      hydration: 60,
+      revision: before.revision + 1,
+      weatherSummary: 'Intervening weather applied',
+    });
+  };
+  let rolls = 0;
+  const result = await api.manuallyWaterPlant(
+    { requestId: 'weather-race-water', date: '2026-08-21' },
+    { random: () => { rolls += 1; return 12 / 21; } },
+  );
+  assert.equal(result.status, 'watered');
+  assert.equal(result.hydrationGain, 12);
+  assert.equal(result.state.hydration, 72);
+  assert.equal(result.state.weatherSummary, 'Intervening weather applied');
+  assert.equal(rolls, 1, 'the retry reuses the original random gain');
+});
+
+test('watering reports a conflict rather than success after both bounded save attempts conflict', async () => {
+  const { api, storage, storageControl } = loadPlantStateApi();
+  await api.savePlantState(baseState(api, { hydration: 50 }));
+  let conflictsInjected = 0;
+  const startingGetCount = storageControl.getCount;
+  storageControl.beforeGet = (count, key) => {
+    if (!Array.isArray(key) || !key.includes('ambientPlantState') || conflictsInjected >= 2) return;
+    // The watering read is followed by the save read. Advance only every second
+    // relevant read so each of the two bounded commits sees a stale revision.
+    const wateringReadNumber = count - startingGetCount;
+    if (wateringReadNumber !== 2 && wateringReadNumber !== 4) return;
+    conflictsInjected += 1;
+    storage.ambientPlantState = api.normalizePlantState({
+      ...storage.ambientPlantState,
+      revision: storage.ambientPlantState.revision + 1,
+      weatherSummary: `Concurrent mutation ${conflictsInjected}`,
+    });
+  };
+  const result = await api.manuallyWaterPlant(
+    { requestId: 'bounded-conflict', date: '2026-08-21' },
+    { random: () => 0.5 },
+  );
+  assert.notEqual(result.status, 'watered');
+  assert.equal(result.status, 'conflict');
+  assert.equal((await api.getStoredPlantState()).hydration, 50);
+});
+
+test('savePlantState reports identity, revision, and storage outcomes explicitly', async () => {
+  const { api, storageControl } = loadPlantStateApi();
+  const saved = await api.savePlantState(baseState(api));
+  assert.equal(saved.status, 'saved');
+  const stale = await api.savePlantState({ ...saved.state, hydration: 1 }, { expectedRevision: saved.state.revision - 1 });
+  assert.equal(stale.status, 'revision-conflict');
+  const wrongPlant = await api.savePlantState({ ...saved.state, plantId: 'another-plant' }, { expectedRevision: saved.state.revision });
+  assert.equal(wrongPlant.status, 'plant-mismatch');
+  storageControl.failNextSet = true;
+  const failed = await api.savePlantState({ ...saved.state, hydration: 60 }, { expectedRevision: saved.state.revision });
+  assert.equal(failed.status, 'persistence-error');
+  assert.match(failed.error, /simulated storage failure/);
 });
 
 test('completed and archived garden-bound plants cannot be manually watered', async () => {
@@ -829,7 +931,7 @@ test('duplicate initialization reports a conflict and cannot replace an active p
   await api.initializePlantState({ plantType: 'fern', location: 'Raleigh, NC' });
   let active = await api.getStoredPlantState();
   active = await api.savePlantState({ ...active, totalGrowth: 88, hydration: 37 }, { expectedRevision: active.revision });
-  const before = JSON.parse(JSON.stringify(active));
+  const before = JSON.parse(JSON.stringify(active.state));
 
   await assert.rejects(
     () => api.initializePlantState({ plantType: 'sapling', location: 'Boone, NC' }),
