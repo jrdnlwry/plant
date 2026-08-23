@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { readPublicEnvironment } from '../lib/env/public.ts';
+import { normalizeSupabaseUrl, readPublicEnvironment } from '../lib/env/public.ts';
 import { safeRedirect } from '../lib/auth/redirect.ts';
 import { validateProfileInput, toPublicContributor } from '../lib/auth/profile.ts';
 
@@ -18,6 +18,12 @@ test('public environment converts a copied Supabase REST endpoint to the project
   });
 
   assert.equal(environment.supabaseUrl, 'https://example.supabase.co');
+  assert.equal(normalizeSupabaseUrl('https://example.supabase.co/rest/v1/'), 'https://example.supabase.co');
+});
+
+test('authentication proxy normalizes the Supabase URL before creating its client', () => {
+  const proxySource = readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8');
+  assert.match(proxySource, /createServerClient\(normalizeSupabaseUrl\(url\), key/);
 });
 
 test('client environment boundary never references service-role configuration', () => {
