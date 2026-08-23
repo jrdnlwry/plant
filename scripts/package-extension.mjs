@@ -16,7 +16,7 @@ export function validateReleaseOrigin(value) {
   return url.origin;
 }
 
-export async function packageExtension(origin = process.env.EXTENSION_SITE_ORIGIN) {
+export async function packageExtension(origin = process.env.EXTENSION_SITE_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL) {
   const normalizedOrigin = validateReleaseOrigin(origin);
   await rm(outputRoot, { recursive: true, force: true });
   await mkdir(path.dirname(outputRoot), { recursive: true });

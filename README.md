@@ -113,6 +113,23 @@ npm run verify:extension-renderer
 Verification is read-only and fails when the committed artifact is missing or stale.
 # Plant Companion
 
+## Closed-beta Netlify deployment
+
+The production-ready Netlify workflow, required environment variables, remote Supabase migration order,
+extension download packaging, and post-deployment smoke test are documented in
+[`docs/netlify-closed-beta-deployment.md`](docs/netlify-closed-beta-deployment.md). Run the same build used by
+Netlify with an HTTPS beta origin:
+
+```sh
+NEXT_PUBLIC_SITE_URL=https://your-site.netlify.app \
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key \
+SUPABASE_SERVICE_ROLE_KEY=your-server-secret \
+npm run build:netlify
+```
+
+Do not commit those values or generated release artifacts.
+
 ## Website authentication (Phase 1.0)
 
 The website uses Supabase passwordless email magic links. Local extension use remains anonymous and

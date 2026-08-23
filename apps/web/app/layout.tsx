@@ -4,7 +4,7 @@ import './styles.css';
 
 export const metadata: Metadata = {
   title: 'Plant Companion',
-  description: 'A minimal web shell for future opt-in community garden infrastructure.',
+  description: 'Grow a private browser plant and share it in the community garden.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
