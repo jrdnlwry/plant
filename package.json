@@ -10,6 +10,8 @@
     "verify:extension-renderer": "node scripts/build-extension-renderer.mjs --verify",
     "validate:extension": "node scripts/validate-extension.mjs",
     "package:extension": "node scripts/package-extension.mjs && EXTENSION_MODE=release EXTENSION_DIR=dist/extension node scripts/validate-extension.mjs",
+    "package:extension-download": "node scripts/package-extension-download.mjs",
+    "build:netlify": "npm run package:extension && npm run package:extension-download && npm run build:web",
     "test": "npm run verify:extension-renderer && npm run validate:extension && node --test && npm run test:web",
     "dev:web": "npm --workspace @plant/web run dev",
     "build:web": "npm --workspace @plant/web run build",

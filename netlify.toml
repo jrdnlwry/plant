@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build:netlify"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Next.js routes and route handlers are deployed by Netlify's automatic Next.js
+# adapter. Do not add a catch-all SPA redirect: it would bypass server/API routing.

@@ -39,6 +39,13 @@ main {
   box-shadow: 0 24px 80px rgba(35, 50, 32, 0.08);
 }
 
+.landing-stack { display: grid; gap: 2rem; }
+.extension-download h2 { margin: 0; font-size: clamp(1.8rem, 5vw, 3rem); }
+.extension-download h3 { margin: 2rem 0 .5rem; }
+.extension-download ol { max-width: 680px; padding-left: 1.4rem; line-height: 1.8; }
+.download-link { display: inline-block; margin-top: .5rem; padding: .85rem 1.1rem; border-radius: .5rem; background: #315b2d; color: white; font-weight: 800; text-decoration: none; }
+.beta-note { margin-top: 1.5rem; padding: .8rem 1rem; border-left: 4px solid #9a6b20; background: #fff3d6; }
+
 .eyebrow {
   margin: 0 0 0.75rem;
   color: #4f7d46;
