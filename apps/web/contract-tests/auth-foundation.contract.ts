@@ -10,6 +10,16 @@ test('public environment accepts complete values and reports missing configurati
   assert.throws(() => readPublicEnvironment({}), /NEXT_PUBLIC_SITE_URL/);
 });
 
+test('public environment converts a copied Supabase REST endpoint to the project URL', () => {
+  const environment = readPublicEnvironment({
+    NEXT_PUBLIC_SITE_URL: 'https://plant-community-garden.netlify.app',
+    NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co/rest/v1/',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: 'public',
+  });
+
+  assert.equal(environment.supabaseUrl, 'https://example.supabase.co');
+});
+
 test('client environment boundary never references service-role configuration', () => {
   const publicSource = readFileSync(new URL('../lib/env/public.ts', import.meta.url), 'utf8');
   const clientSource = readFileSync(new URL('../lib/supabase/client.ts', import.meta.url), 'utf8');
